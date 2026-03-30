@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>T-Shirt Orders</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: #0e0e0e; color: #f0ede8; font-family: 'Courier New', monospace; min-height: 100vh; padding-bottom: 90px; }
+
+  .header { background: #0e0e0e; border-bottom: 1px solid #2a2a2a; padding: 18px 20px 14px; position: sticky; top: 0; z-index: 20; }
+  .header-top { display: flex; justify-content: space-between; align-items: center; }
+  .header-label { font-size: 11px; letter-spacing: 4px; color: #666; text-transform: uppercase; }
+  .header-title { font-size: 22px; font-weight: 700; letter-spacing: -1px; margin-top: 2px; }
+  .header-total-label { font-size: 11px; color: #666; letter-spacing: 2px; text-align: right; }
+  .header-total-num { font-size: 28px; font-weight: 900; color: #e8c97a; text-align: right; }
+  .sync-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 1px; padding: 4px 10px; border-radius: 20px; margin-top: 8px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .tabs { display: flex; gap: 4px; margin-top: 10px; }
+  .tab { flex: 1; padding: 7px 0; border: 1px solid; border-radius: 6px; cursor: pointer; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-family: inherit; font-weight: 700; transition: all 0.15s; }
+  .tab.active { background: #e8c97a; color: #0e0e0e; border-color: #e8c97a; }
+  .tab.inactive { background: transparent; color: #888; border-color: #2a2a2a; }
+
+  /* Setup screen */
+  .setup-screen { padding: 30px 20px; }
+  .setup-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 14px; padding: 24px 20px; }
+  .setup-icon { font-size: 32px; margin-bottom: 14px; }
+  .setup-title { font-size: 15px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+  .setup-desc { font-size: 12px; color: #888; line-height: 1.7; margin-bottom: 20px; }
+  .setup-steps { margin-bottom: 20px; }
+  .setup-step { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; background: #e8c97a; color: #0e0e0e; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .step-text { font-size: 12px; color: #aaa; line-height: 1.6; }
+  .step-text a { color: #e8c97a; text-decoration: none; }
+  .setup-input { width: 100%; padding: 12px 14px; background: #1e1e1e; border: 1px solid #333; border-radius: 10px; color: #f0ede8; font-size: 13px; font-family: inherit; outline: none; margin-bottom: 10px; }
+  .setup-input:focus { border-color: #e8c97a; }
+  .setup-btn { width: 100%; padding: 14px; border-radius: 10px; border: none; background: #e8c97a; color: #0e0e0e; font-size: 13px; font-family: inherit; font-weight: 900; letter-spacing: 2px; cursor: pointer; text-transform: uppercase; }
+  .setup-note { font-size: 10px; color: #444; text-align: center; margin-top: 12px; line-height: 1.6; }
+
+  .content { padding: 14px 16px 0; }
+  .order-list { display: flex; flex-direction: column; gap: 10px; }
+  .order-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .order-idx { font-size: 11px; color: #444; min-width: 18px; text-align: center; }
+  .color-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .order-info { flex: 1; min-width: 0; }
+  .order-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-meta { font-size: 11px; color: #666; letter-spacing: 1px; margin-top: 3px; }
+  .qty-badge { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 4px 10px; text-align: center; min-width: 44px; }
+  .qty-label { font-size: 9px; color: #555; letter-spacing: 2px; }
+  .qty-num { font-size: 18px; font-weight: 900; color: #e8c97a; }
+  .action-col { display: flex; flex-direction: column; gap: 6px; }
+  .btn-icon { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #333; background: #1e1e1e; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .empty { text-align: center; padding: 60px 20px; color: #444; }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; }
+  .empty-title { font-size: 13px; letter-spacing: 2px; }
+  .empty-sub { font-size: 11px; color: #333; margin-top: 6px; }
+
+  .summary-table { border: 1px solid #2a2a2a; border-radius: 12px; overflow: hidden; }
+  .summary-head { background: #1a1a1a; display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; padding: 10px 12px; border-bottom: 1px solid #2a2a2a; }
+  .summary-head-cell { font-size: 10px; letter-spacing: 2px; color: #666; }
+  .summary-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; padding: 12px; align-items: center; border-bottom: 1px solid #1e1e1e; }
+  .summary-row:last-of-type { border-bottom: none; }
+  .summary-foot { background: #1a1a1a; display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; padding: 10px 12px; border-top: 1px solid #2a2a2a; }
+  .summary-color { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #ccc; }
+  .summary-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sum-cell { text-align: center; font-size: 16px; font-weight: 700; }
+  .sum-cell.zero { color: #333; } .sum-cell.nonzero { color: #e8c97a; }
+  .sum-total { text-align: right; font-size: 16px; font-weight: 900; color: #fff; }
+  .foot-label { font-size: 10px; letter-spacing: 2px; color: #666; }
+  .foot-cell { text-align: center; font-size: 14px; font-weight: 700; color: #e8c97a; }
+  .foot-grand { text-align: right; font-size: 16px; font-weight: 900; color: #e8c97a; }
+  .size-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .size-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px 10px; text-align: center; }
+  .size-card-label { font-size: 10px; color: #666; letter-spacing: 3px; margin-bottom: 6px; }
+  .size-card-num { font-size: 28px; font-weight: 900; color: #e8c97a; }
+  .all-orders-table { border: 1px solid #2a2a2a; border-radius: 12px; overflow: hidden; }
+  .all-orders-head { background: #1a1a1a; padding: 10px 14px; border-bottom: 1px solid #2a2a2a; font-size: 10px; letter-spacing: 3px; color: #666; }
+  .all-orders-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #1a1a1a; }
+  .all-orders-row:last-child { border-bottom: none; }
+  .all-name { flex: 1; font-size: 13px; }
+  .all-meta { font-size: 11px; color: #666; }
+  .all-qty { font-size: 14px; font-weight: 700; color: #e8c97a; }
+
+  .fab { position: fixed; bottom: 26px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #e8c97a; border: none; color: #0e0e0e; font-size: 28px; cursor: pointer; box-shadow: 0 4px 20px rgba(232,201,122,0.4); display: flex; align-items: center; justify-content: center; z-index: 30; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; display: flex; align-items: flex-end; }
+  .sheet { background: #141414; border-radius: 18px 18px 0 0; padding: 24px 20px 40px; width: 100%; border: 1px solid #2a2a2a; border-bottom: none; }
+  .sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+  .sheet-title { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .sheet-close { background: none; border: none; color: #666; font-size: 20px; cursor: pointer; padding: 0 4px; }
+  .field { margin-bottom: 18px; }
+  .field-label { font-size: 10px; letter-spacing: 3px; color: #666; margin-bottom: 8px; }
+  .field-input { width: 100%; padding: 12px 14px; background: #1e1e1e; border: 1px solid #333; border-radius: 10px; color: #f0ede8; font-size: 16px; font-family: inherit; outline: none; }
+  .field-input:focus { border-color: #e8c97a; }
+  .color-row, .size-row { display: flex; gap: 10px; }
+  .color-btn { flex: 1; padding: 10px 0; border-radius: 10px; font-family: inherit; font-size: 12px; cursor: pointer; letter-spacing: 1px; }
+  .size-btn { flex: 1; padding: 12px 0; border-radius: 10px; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .qty-row { display: flex; align-items: center; gap: 16px; justify-content: center; }
+  .qty-btn { width: 44px; height: 44px; border: 1px solid #333; border-radius: 10px; background: #1e1e1e; color: #aaa; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .qty-val { font-size: 32px; font-weight: 900; color: #e8c97a; min-width: 50px; text-align: center; }
+  .submit-btn { width: 100%; padding: 15px 0; border-radius: 12px; border: none; background: #e8c97a; color: #0e0e0e; font-size: 14px; font-family: inherit; font-weight: 900; letter-spacing: 2px; cursor: pointer; text-transform: uppercase; margin-top: 4px; }
+
+  .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .confirm-box { background: #161616; border: 1px solid #3a2020; border-radius: 14px; padding: 24px; width: 100%; max-width: 320px; }
+  .confirm-title { font-size: 13px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+  .confirm-sub { font-size: 12px; color: #666; margin-bottom: 22px; }
+  .confirm-btns { display: flex; gap: 10px; }
+  .confirm-cancel { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #2a2a2a; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
+  .confirm-delete { flex: 1; padding: 12px; border-radius: 10px; border: none; background: #ff4444; color: #fff; font-family: inherit; font-weight: 700; font-size: 12px; cursor: pointer; }
+  .toast { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 1px; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.5); max-width: 80vw; text-align: center; pointer-events: none; transition: opacity 0.3s; }
+  .gap-stack { display: flex; flex-direction: column; gap: 14px; }
+  .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid #444; border-top-color: #e8c97a; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Setup Screen -->
+<div id="setup-screen" style="display:none;">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-label">First Time Setup</div>
+        <div class="header-title">T-SHIRT ORDERS</div>
+      </div>
+    </div>
+  </div>
+  <div class="setup-screen">
+    <div class="setup-card">
+      <div class="setup-icon">☁️</div>
+      <div class="setup-title">Connect Cloud Sync</div>
+      <div class="setup-desc">One-time setup so your orders sync instantly across all your devices (phone, PC, tablet).</div>
+      <div class="setup-steps">
+        <div class="setup-step">
+          <div class="step-num">1</div>
+          <div class="step-text">Go to <a href="https://firebase.google.com" target="_blank">firebase.google.com</a> → click <strong>Get Started</strong> → sign in with Google</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">2</div>
+          <div class="step-text">Click <strong>Add project</strong> → name it "tshirt-orders" → skip Analytics → Create project</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">3</div>
+          <div class="step-text">In left sidebar → <strong>Build → Realtime Database</strong> → Create database → Start in <strong>test mode</strong> → Enable</div>
+        </div>
+        <div class="setup-step">
+          <div class="step-num">4</div>
+          <div class="step-text">Copy the database URL shown (looks like <em>https://tshirt-orders-xxxxx-default-rtdb.firebaseio.com</em>) and paste it below</div>
+        </div>
+      </div>
+      <input class="setup-input" id="db-url-input" type="url" placeholder="https://your-project-default-rtdb.firebaseio.com" autocomplete="off">
+      <button class="setup-btn" onclick="saveDbUrl()">CONNECT & START</button>
+      <div class="setup-note">Free plan. No credit card. Data stored securely on Google servers.<br>Takes about 3 minutes total.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="main-app" style="display:none;">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-label">Order Tracker</div>
+        <div class="header-title">T-SHIRT ORDERS</div>
+      </div>
+      <div>
+        <div class="header-total-label">TOTAL</div>
+        <div class="header-total-num" id="grand-total">0</div>
+      </div>
+    </div>
+    <div id="sync-badge" class="sync-badge" style="background:#1a1a1a;color:#666;">
+      <div class="sync-dot" style="background:#444"></div>
+      <span id="sync-status">Connecting...</span>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tab-orders" onclick="switchTab('orders')">👤 Orders (<span id="order-count">0</span>)</button>
+      <button class="tab inactive" id="tab-summary" onclick="switchTab('summary')">📊 Summary</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="view-orders">
+      <div id="order-list" class="order-list"></div>
+      <div id="empty-state" class="empty" style="display:none;">
+        <div class="empty-icon">👕</div>
+        <div class="empty-title">NO ORDERS YET</div>
+        <div class="empty-sub">Tap + to add your first order</div>
+      </div>
+    </div>
+    <div id="view-summary" style="display:none;">
+      <div class="gap-stack">
+        <div class="summary-table">
+          <div class="summary-head">
+            <div class="summary-head-cell">COLOR</div>
+            <div class="summary-head-cell" style="text-align:center">S</div>
+            <div class="summary-head-cell" style="text-align:center">M</div>
+            <div class="summary-head-cell" style="text-align:center">L</div>
+            <div class="summary-head-cell" style="text-align:right">TOTAL</div>
+          </div>
+          <div id="summary-rows"></div>
+          <div class="summary-foot" id="summary-foot"></div>
+        </div>
+        <div class="size-cards" id="size-cards"></div>
+        <div class="all-orders-table" id="all-orders-table" style="display:none;">
+          <div class="all-orders-head">ALL ORDERS</div>
+          <div id="all-orders-rows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="fab" onclick="openAdd()">+</button>
+</div>
+
+<!-- Add/Edit Form -->
+<div class="overlay" id="form-overlay" style="display:none;" onclick="overlayClick(event)">
+  <div class="sheet">
+    <div class="sheet-header">
+      <div class="sheet-title" id="form-title">New Order</div>
+      <button class="sheet-close" onclick="closeForm()">✕</button>
+    </div>
+    <div class="field">
+      <div class="field-label">CUSTOMER NAME</div>
+      <input class="field-input" id="f-name" type="text" placeholder="e.g. Rahul" autocomplete="off" onkeydown="if(event.key==='Enter')submitForm()">
+    </div>
+    <div class="field">
+      <div class="field-label">COLOR</div>
+      <div class="color-row" id="color-row"></div>
+    </div>
+    <div class="field">
+      <div class="field-label">SIZE</div>
+      <div class="size-row" id="size-row"></div>
+    </div>
+    <div class="field">
+      <div class="field-label">QUANTITY</div>
+      <div class="qty-row">
+        <button class="qty-btn" onclick="changeQty(-1)">−</button>
+        <div class="qty-val" id="qty-display">1</div>
+        <button class="qty-btn" onclick="changeQty(1)">+</button>
+      </div>
+    </div>
+    <button class="submit-btn" id="submit-btn" onclick="submitForm()">ADD ORDER</button>
+  </div>
+</div>
+
+<!-- Delete Confirm -->
+<div class="confirm-overlay" id="confirm-overlay" style="display:none;">
+  <div class="confirm-box">
+    <div class="confirm-title">Delete this order?</div>
+    <div class="confirm-sub">This cannot be undone.</div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="cancelDelete()">Cancel</button>
+      <button class="confirm-delete" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" style="display:none;"></div>
+
+<script>
+const COLORS = ["Black","Brown","White"];
+const SIZES  = ["S","M","L"];
+const COLOR_META = {
+  Black: { bg:"#111",   text:"#fff", border:"#555",   dot:"#555"   },
+  Brown: { bg:"#6B3A2A",text:"#fff", border:"#a06040",dot:"#a06040"},
+  White: { bg:"#e8e4db",text:"#222", border:"#bbb",   dot:"#ccc"   },
+};
+const DB_KEY = "https://tshirt-orders-44725-default-rtdb.firebaseio.com/";
+
+let orders    = [];
+let editId    = null;
+let deleteId  = null;
+let formQty   = 1;
+let formColor = "Black";
+let formSize  = "M";
+let toastTimer = null;
+let activeTab = "orders";
+let dbUrl     = "";
+let saving    = false;
+
+// ── Firebase REST helpers ──────────────────────────────────────────────────
+function fbUrl() { return dbUrl.replace(/\/?$/, "") + "/orders.json"; }
+
+async function fbRead() {
+  const r = await fetch(fbUrl());
+  if (!r.ok) throw new Error("Read failed: " + r.status);
+  const data = await r.json();
+  return data ? Object.values(data) : [];
+}
+
+async function fbWrite(list) {
+  // Convert array → object keyed by id for Firebase
+  const obj = {};
+  list.forEach(o => { obj[o.id] = o; });
+  const r = await fetch(fbUrl(), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj)
+  });
+  if (!r.ok) throw new Error("Write failed: " + r.status);
+}
+
+// ── Setup ──────────────────────────────────────────────────────────────────
+function saveDbUrl() {
+  const val = document.getElementById("db-url-input").value.trim();
+  if (!val.startsWith("https://") || !val.includes("firebaseio.com")) {
+    showToast("Paste a valid Firebase URL", "err"); return;
+  }
+  dbUrl = val.endsWith("/") ? val.slice(0,-1) : val;
+  localStorage.setItem(DB_KEY, dbUrl);
+  startApp();
+}
+
+async function startApp() {
+  document.getElementById("setup-screen").style.display = "none";
+  document.getElementById("main-app").style.display    = "block";
+  setSyncStatus("loading");
+  try {
+    orders = await fbRead();
+    setSyncStatus("ok");
+    render();
+    // Poll for changes every 8 seconds (lightweight sync)
+    setInterval(async () => {
+      try { orders = await fbRead(); render(); } catch {}
+    }, 8000);
+  } catch(e) {
+    setSyncStatus("err");
+    showToast("Could not connect to Firebase", "err");
+  }
+}
+
+function setSyncStatus(state) {
+  const badge  = document.getElementById("sync-badge");
+  const dot    = badge.querySelector(".sync-dot");
+  const label  = document.getElementById("sync-status");
+  if (state === "ok")      { badge.style.background="#0f2a0f"; badge.style.color="#6abf6a"; dot.style.background="#6abf6a"; label.textContent="Synced"; }
+  if (state === "loading") { badge.style.background="#1a1a1a"; badge.style.color="#888";    dot.style.background="#888";    label.innerHTML='<span class="spinner"></span> Syncing...'; }
+  if (state === "err")     { badge.style.background="#2a1010"; badge.style.color="#ff6b6b"; dot.style.background="#ff6b6b"; label.textContent="Sync error"; }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const total = orders.reduce((s,o) => s+o.qty, 0);
+  document.getElementById("grand-total").textContent  = total;
+  document.getElementById("order-count").textContent  = orders.length;
+  renderOrders();
+  if (activeTab === "summary") renderSummary();
+}
+
+function renderOrders() {
+  const list  = document.getElementById("order-list");
+  const empty = document.getElementById("empty-state");
+  if (!orders.length) { list.innerHTML=""; empty.style.display="block"; return; }
+  empty.style.display = "none";
+  list.innerHTML = orders.map((o,i) => {
+    const cm = COLOR_META[o.color];
+    return `<div class="order-card">
+      <div class="order-idx">${i+1}</div>
+      <div class="color-dot" style="background:${cm.bg};border:2px solid ${cm.dot}"></div>
+      <div class="order-info">
+        <div class="order-name">${esc(o.name)}</div>
+        <div class="order-meta">${o.color} · Size ${o.size}</div>
+      </div>
+      <div class="qty-badge"><div class="qty-label">QTY</div><div class="qty-num">${o.qty}</div></div>
+      <div class="action-col">
+        <button class="btn-icon" onclick="openEdit('${o.id}')">✏️</button>
+        <button class="btn-icon" style="border-color:#3a2020" onclick="askDelete('${o.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderSummary() {
+  const g = {};
+  COLORS.forEach(c => { g[c]={}; SIZES.forEach(s => g[c][s]=0); });
+  orders.forEach(({color,size,qty}) => { g[color][size]+=qty; });
+  document.getElementById("summary-rows").innerHTML = COLORS.map(color => {
+    const cm = COLOR_META[color];
+    const rt = SIZES.reduce((s,sz)=>s+g[color][sz],0);
+    return `<div class="summary-row">
+      <div class="summary-color"><div class="summary-dot" style="background:${cm.bg};border:1px solid ${cm.dot}"></div>${color}</div>
+      ${SIZES.map(s=>`<div class="sum-cell ${g[color][s]>0?'nonzero':'zero'}">${g[color][s]}</div>`).join("")}
+      <div class="sum-total">${rt}</div></div>`;
+  }).join("");
+  const st = SIZES.map(s=>COLORS.reduce((sum,c)=>sum+g[c][s],0));
+  const gt = orders.reduce((s,o)=>s+o.qty,0);
+  document.getElementById("summary-foot").innerHTML =
+    `<div class="foot-label">TOTAL</div>${st.map(t=>`<div class="foot-cell">${t}</div>`).join("")}<div class="foot-grand">${gt}</div>`;
+  document.getElementById("size-cards").innerHTML = SIZES.map((s,i)=>
+    `<div class="size-card"><div class="size-card-label">SIZE ${s}</div><div class="size-card-num">${st[i]}</div></div>`).join("");
+  const tbl = document.getElementById("all-orders-table");
+  if (!orders.length) { tbl.style.display="none"; return; }
+  tbl.style.display="block";
+  document.getElementById("all-orders-rows").innerHTML = orders.map((o,i)=>{
+    const cm=COLOR_META[o.color];
+    return `<div class="all-orders-row">
+      <div style="font-size:11px;color:#444;min-width:18px">${i+1}</div>
+      <div style="width:8px;height:8px;border-radius:50%;background:${cm.bg};border:1px solid ${cm.dot};flex-shrink:0"></div>
+      <div class="all-name">${esc(o.name)}</div>
+      <div class="all-meta">${o.color} · ${o.size}</div>
+      <div class="all-qty">×${o.qty}</div></div>`;
+  }).join("");
+}
+
+// ── Tab ────────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  activeTab=t;
+  document.getElementById("view-orders").style.display  = t==="orders"  ?"block":"none";
+  document.getElementById("view-summary").style.display = t==="summary" ?"block":"none";
+  document.getElementById("tab-orders").className  = "tab "+(t==="orders" ?"active":"inactive");
+  document.getElementById("tab-summary").className = "tab "+(t==="summary"?"active":"inactive");
+  if (t==="summary") renderSummary();
+}
+
+// ── Form ───────────────────────────────────────────────────────────────────
+function openAdd() {
+  editId=null; formColor="Black"; formSize="M"; formQty=1;
+  document.getElementById("f-name").value="";
+  document.getElementById("form-title").textContent="New Order";
+  document.getElementById("submit-btn").textContent="ADD ORDER";
+  document.getElementById("qty-display").textContent=1;
+  buildColorRow(); buildSizeRow();
+  document.getElementById("form-overlay").style.display="flex";
+  setTimeout(()=>document.getElementById("f-name").focus(),100);
+}
+
+function openEdit(id) {
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  editId=id; formColor=o.color; formSize=o.size; formQty=o.qty;
+  document.getElementById("f-name").value=o.name;
+  document.getElementById("form-title").textContent="Edit Order";
+  document.getElementById("submit-btn").textContent="UPDATE ORDER";
+  document.getElementById("qty-display").textContent=formQty;
+  buildColorRow(); buildSizeRow();
+  document.getElementById("form-overlay").style.display="flex";
+}
+
+function closeForm()          { document.getElementById("form-overlay").style.display="none"; }
+function overlayClick(e)      { if(e.target===e.currentTarget) closeForm(); }
+function pickColor(c)         { formColor=c; buildColorRow(); }
+function pickSize(s)          { formSize=s;  buildSizeRow(); }
+function changeQty(d)         { formQty=Math.max(1,formQty+d); document.getElementById("qty-display").textContent=formQty; }
+
+function buildColorRow() {
+  document.getElementById("color-row").innerHTML = COLORS.map(c=>{
+    const cm=COLOR_META[c], sel=formColor===c;
+    return `<button class="color-btn" style="background:${cm.bg};color:${cm.text};border:${sel?'2px solid #e8c97a':`1px solid ${cm.border}`};font-weight:${sel?700:400}" onclick="pickColor('${c}')">${c}</button>`;
+  }).join("");
+}
+function buildSizeRow() {
+  document.getElementById("size-row").innerHTML = SIZES.map(s=>{
+    const sel=formSize===s;
+    return `<button class="size-btn" style="border:${sel?'2px solid #e8c97a':'1px solid #333'};background:${sel?'#1e1a0e':'#1e1e1e'};color:${sel?'#e8c97a':'#888'}" onclick="pickSize('${s}')">${s}</button>`;
+  }).join("");
+}
+
+async function submitForm() {
+  const name=document.getElementById("f-name").value.trim();
+  if(!name) { showToast("Enter a name","err"); return; }
+  if(saving) return;
+  saving=true;
+  const btn=document.getElementById("submit-btn");
+  btn.textContent="SAVING..."; btn.style.opacity="0.7";
+  setSyncStatus("loading");
+  if(editId) {
+    orders=orders.map(o=>o.id===editId?{...o,name,color:formColor,size:formSize,qty:formQty}:o);
+  } else {
+    orders.push({id:uid(),name,color:formColor,size:formSize,qty:formQty});
+  }
+  try {
+    await fbWrite(orders);
+    setSyncStatus("ok");
+    closeForm();
+    render();
+    showToast(editId?"Updated!":"Order added!");
+  } catch(e) {
+    setSyncStatus("err");
+    showToast("Save failed: "+e.message,"err");
+  }
+  saving=false; btn.style.opacity="1";
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+function askDelete(id)   { deleteId=id; document.getElementById("confirm-overlay").style.display="flex"; }
+function cancelDelete()  { deleteId=null; document.getElementById("confirm-overlay").style.display="none"; }
+async function confirmDelete() {
+  orders=orders.filter(o=>o.id!==deleteId);
+  try { await fbWrite(orders); setSyncStatus("ok"); } catch { setSyncStatus("err"); }
+  render(); cancelDelete(); showToast("Deleted");
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg,type="ok") {
+  const el=document.getElementById("toast");
+  el.textContent=msg;
+  el.style.background=type==="err"?"#ff4444":"#e8c97a";
+  el.style.color=type==="err"?"#fff":"#0e0e0e";
+  el.style.display="block"; el.style.opacity=1;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ el.style.opacity=0; setTimeout(()=>el.style.display="none",300); },2500);
+}
+
+// ── Util ───────────────────────────────────────────────────────────────────
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+dbUrl = "https://tshirt-orders-44725-default-rtdb.firebaseio.com/";
+startApp();
+Copy
+</script>
+</body>
+</html>
