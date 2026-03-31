@@ -7,11 +7,10 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
-  // CRITICAL FIX: Added Remote Config imports
   import { getRemoteConfig, getValue, fetchAndActivate } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-remote-config.js";
 
   const firebaseConfig = {
-    // PASTE YOUR NEW KEY FROM THE CONSOLE HERE:
+    // 1. CLICK 'SHOW KEY' IN YOUR CONSOLE AND PASTE IT HERE
     apiKey: "REMOVED_FROM_HISTORY", 
     authDomain: "tshirt-orders-44725.firebaseapp.com",
     databaseURL: "https://tshirt-orders-44725-default-rtdb.firebaseio.com",
@@ -22,24 +21,29 @@
     measurementId: "G-CD9JF0HFTH"
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
-  
-  // Initialize Remote Config
   const remoteConfig = getRemoteConfig(app);
-  remoteConfig.settings.minimumFetchIntervalMillis = 0; // Set to 0 for instant testing
 
-  // The Actual Redirect Logic
+  // Set fetch interval to 0 for immediate testing
+  remoteConfig.settings.minimumFetchIntervalMillis = 0;
+
+  // 2. ADD DEFAULTS (This ensures the app knows the variable exists)
+  remoteConfig.defaultConfig = {
+    "is_maintenance": false
+  };
+
   fetchAndActivate(remoteConfig)
     .then(() => {
       const isMaintenance = getValue(remoteConfig, "is_maintenance").asBoolean();
-      if (isMaintenance) {
+      console.log("Remote Config loaded. Maintenance Mode:", isMaintenance);
+
+      if (isMaintenance === true) {
         window.location.href = "maintenance.html";
       }
     })
     .catch((err) => {
-      console.error("Remote Config Error:", err);
+      console.error("Firebase Error:", err);
     });
 </script>
 
