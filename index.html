@@ -57,10 +57,6 @@
         if (isMaintenance === true) {
           window.location.href = "maintenance.html";
         }
-
-        if (typeof window.startApp === "function") {
-          window.startApp();
-        }
       })
       .catch((err) => {
         console.error("Firebase Error:", err);
@@ -900,40 +896,40 @@
     let dbUrl = "FIREBASE_DB_URL_PLACEHOLDER";
     let saving = false;
 
-    // ── Firebase SDK helpers ──────────────────────────────────────────────────
+    // ── Firebase REST helpers ──────────────────────────────────────────────────
+    function fbUrl() { return dbUrl.replace(/\/?$/, "") + "/orders.json"; }
+
+    async function fbRead() {
+      const r = await fetch(fbUrl());
+      if (!r.ok) throw new Error("Read failed: " + r.status);
+      const data = await r.json();
+      return data ? Object.values(data) : [];
+    }
+
     async function fbWrite(list) {
       const obj = {};
       list.forEach(o => { obj[o.id] = o; });
-      const ordersRef = window.fbRef(window.fbDb, "orders");
-      await window.fbSet(ordersRef, obj);
+      const r = await fetch(fbUrl(), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(obj)
+      });
+      if (!r.ok) throw new Error("Write failed: " + r.status);
     }
 
-    function startApp() {
+    async function startApp() {
       setSyncStatus("loading");
-
-      // Auth Listener (Temporarily Disabled)
-      /* window.fbOnAuthStateChanged(window.fbAuth, (user) => {
-        if (user) {
-          document.body.classList.add("is-admin");
-          document.getElementById("admin-toggle-btn").textContent = "🔓";
-          document.getElementById("admin-overlay").style.display = "none";
-        } else {
-          document.body.classList.remove("is-admin");
-          document.getElementById("admin-toggle-btn").textContent = "🔒";
-        }
-      }); */
-
-      // DB Listener
-      const ordersRef = window.fbRef(window.fbDb, "orders");
-      window.fbOnValue(ordersRef, (snapshot) => {
-        const data = snapshot.val();
-        orders = data ? Object.values(data) : [];
+      try {
+        orders = await fbRead();
         setSyncStatus("ok");
         render();
-      }, (error) => {
+        setInterval(async () => {
+          try { orders = await fbRead(); render(); } catch { }
+        }, 8000);
+      } catch (e) {
         setSyncStatus("err");
-        showToast("Could not sync with Firebase", "err");
-      });
+        showToast("Could not connect to Firebase", "err");
+      }
     }
 
     function toggleAdmin() {
@@ -1138,8 +1134,7 @@
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
-    window.startApp = startApp;
-    // The startApp() call is now safely triggered from the module block above.
+    startApp();
   </script>
 </body>
 
