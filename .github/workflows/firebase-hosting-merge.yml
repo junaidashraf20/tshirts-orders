@@ -1,19 +1,19 @@
 name: Deploy to Firebase Hosting
-
 on:
   push:
     branches:
       - main
-      - maintenance   # optional (for maintenance mode)
+      - maintenance
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      # 🚫 REMOVE npm install/build (not needed)
+      - name: Inject Firebase URL
+        run: |
+          sed -i 's|FIREBASE_DB_URL_PLACEHOLDER|${{ secrets.FIREBASE_DB_URL }}|g' index.html
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
