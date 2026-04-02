@@ -232,6 +232,12 @@
     .color-row, .size-row { display: flex; gap: 10px; }
     .color-btn, .size-btn { flex: 1; padding: 14px 0; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s; border: 1px solid var(--border); background: var(--card); color: var(--text-muted); }
     
+    #size-advice {
+      font-size: 9px; font-weight: 800; color: var(--accent); letter-spacing: 1px;
+      text-transform: uppercase; text-align: left; height: 12px; margin-bottom: 6px;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none;
+    }
+    
     .qty-row { display: flex; align-items: center; gap: 20px; justify-content: center; padding: 10px 0; }
     .qty-btn { width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--text); font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
     .qty-btn:active { background: #111; }
@@ -475,6 +481,7 @@
       </div>
       <div class="field">
         <div class="field-label">SIZE</div>
+        <div id="size-advice"></div>
         <div class="size-row" id="size-row"></div>
       </div>
       <div class="field">
@@ -822,10 +829,30 @@
       }).join("");
     }
     function buildSizeRow() {
+      const advice = {
+        "S": "S IS HUGE! IF YOU'RE M, S IS YOUR TRUE FIT.",
+        "M": "M IS LIKE A TENT. IF YOU'RE L, M IS FINE!",
+        "L": "L FOR LEGEND. PREPARE FOR MASSIVE VOLUME.",
+        "XL": "XL? ARE YOU WEARING A MOBILE ROOM??"
+      };
       document.getElementById("size-row").innerHTML = SIZES.map(s => {
         const sel = formSize === s;
-        return `<button class="size-btn" style="border:${sel ? '2px solid var(--accent)' : '1px solid var(--border)'};background:${sel ? 'var(--card)' : 'var(--bg)'};color:${sel ? 'var(--accent)' : 'var(--text-muted)'}" onclick="pickSize('${s}')">${s}</button>`;
+        return `<button class="size-btn" 
+          style="border:${sel ? '2px solid var(--accent)' : '1px solid var(--border)'};background:${sel ? 'var(--card)' : 'var(--bg)'};color:${sel ? 'var(--accent)' : 'var(--text-muted)'}" 
+          onmouseenter="showSizeAdvice('${advice[s]}')"
+          onmouseleave="hideSizeAdvice()"
+          onclick="pickSize('${s}')">${s}</button>`;
       }).join("");
+    }
+
+    function showSizeAdvice(msg) {
+      const el = document.getElementById("size-advice");
+      el.textContent = msg;
+      el.style.opacity = "1";
+    }
+
+    function hideSizeAdvice() {
+      document.getElementById("size-advice").style.opacity = "0";
     }
 
     async function submitForm() {
