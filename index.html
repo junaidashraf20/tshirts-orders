@@ -57,6 +57,10 @@
         if (isMaintenance === true) {
           window.location.href = "maintenance.html";
         }
+
+        if (typeof window.startApp === "function") {
+          window.startApp();
+        }
       })
       .catch((err) => {
         console.error("Firebase Error:", err);
@@ -1134,7 +1138,8 @@
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
-    startApp();
+    window.startApp = startApp;
+    // The startApp() call is now safely triggered from the module block above.
   </script>
 </body>
 
