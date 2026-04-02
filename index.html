@@ -9,6 +9,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
     import { getRemoteConfig, getValue, fetchAndActivate } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-remote-config.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
     const firebaseConfig = {
       // 1. CLICK 'SHOW KEY' IN YOUR CONSOLE AND PASTE IT HERE
@@ -25,6 +27,19 @@
     const app = initializeApp(firebaseConfig);
     const analytics = getAnalytics(app);
     const remoteConfig = getRemoteConfig(app);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    // Export to window for inline HTML functions below
+    window.fbAuth = auth;
+    window.fbDb = db;
+    window.fbRef = ref;
+    window.fbOnValue = onValue;
+    window.fbSet = set;
+    window.fbRemove = remove;
+    window.fbSignInWithEmailAndPassword = signInWithEmailAndPassword;
+    window.fbSignOut = signOut;
+    window.fbOnAuthStateChanged = onAuthStateChanged;
 
     // Set fetch interval to 0 for immediate testing
     remoteConfig.settings.minimumFetchIntervalMillis = 0;
@@ -703,6 +718,30 @@
         transform: rotate(360deg);
       }
     }
+
+    .admin-only {
+      display: none !important;
+    }
+
+    body.is-admin .admin-only {
+      display: flex !important;
+    }
+
+    .admin-toggle {
+      font-size: 14px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0 5px;
+      margin-left: 10px;
+      filter: grayscale(100%);
+      opacity: 0.5;
+    }
+
+    body.is-admin .admin-toggle {
+      filter: none;
+      opacity: 1;
+    }
   </style>
 </head>
 
@@ -717,7 +756,8 @@
           <div class="header-title">T-SHIRT ORDERS</div>
         </div>
         <div>
-          <div class="header-total-label">TOTAL</div>
+          <div class="header-total-label">TOTAL <button id="admin-toggle-btn" class="admin-toggle"
+              onclick="toggleAdmin()">🔒</button></div>
           <div class="header-total-num" id="grand-total">0</div>
         </div>
       </div>
@@ -763,7 +803,7 @@
       </div>
     </div>
 
-    <button class="fab" onclick="openAdd()">+</button>
+    <button class="fab admin-only" onclick="openAdd()">+</button>
   </div>
 
   <!-- Add/Edit Form -->
@@ -810,6 +850,27 @@
     </div>
   </div>
 
+  <!-- Admin Login Form -->
+  <div class="overlay" id="admin-overlay" style="display:none;"
+    onclick="if(event.target===this) this.style.display='none'">
+    <div class="sheet">
+      <div class="sheet-header">
+        <div class="sheet-title">Admin Login</div>
+        <button class="sheet-close" onclick="document.getElementById('admin-overlay').style.display='none'">✕</button>
+      </div>
+      <div class="field">
+        <div class="field-label">EMAIL</div>
+        <input class="field-input" id="admin-email" type="email" placeholder="admin@example.com" autocomplete="off" />
+      </div>
+      <div class="field">
+        <div class="field-label">PASSWORD</div>
+        <input class="field-input" id="admin-pass" type="password" placeholder="Password"
+          onkeydown="if(event.key==='Enter')loginAdmin()" />
+      </div>
+      <button class="submit-btn" id="admin-submit-btn" onclick="loginAdmin()">LOG IN</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast" style="display:none;"></div>
 
   <script>
@@ -832,40 +893,70 @@
     let dbUrl = "FIREBASE_DB_URL_PLACEHOLDER";
     let saving = false;
 
-    // ── Firebase REST helpers ──────────────────────────────────────────────────
-    function fbUrl() { return dbUrl.replace(/\/?$/, "") + "/orders.json"; }
-
-    async function fbRead() {
-      const r = await fetch(fbUrl());
-      if (!r.ok) throw new Error("Read failed: " + r.status);
-      const data = await r.json();
-      return data ? Object.values(data) : [];
-    }
-
+    // ── Firebase SDK helpers ──────────────────────────────────────────────────
     async function fbWrite(list) {
       const obj = {};
       list.forEach(o => { obj[o.id] = o; });
-      const r = await fetch(fbUrl(), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(obj)
-      });
-      if (!r.ok) throw new Error("Write failed: " + r.status);
+      const ordersRef = window.fbRef(window.fbDb, "orders");
+      await window.fbSet(ordersRef, obj);
     }
 
-    async function startApp() {
+    function startApp() {
       setSyncStatus("loading");
-      try {
-        orders = await fbRead();
+
+      // Auth Listener
+      window.fbOnAuthStateChanged(window.fbAuth, (user) => {
+        if (user) {
+          document.body.classList.add("is-admin");
+          document.getElementById("admin-toggle-btn").textContent = "🔓";
+          document.getElementById("admin-overlay").style.display = "none";
+        } else {
+          document.body.classList.remove("is-admin");
+          document.getElementById("admin-toggle-btn").textContent = "🔒";
+        }
+      });
+
+      // DB Listener
+      const ordersRef = window.fbRef(window.fbDb, "orders");
+      window.fbOnValue(ordersRef, (snapshot) => {
+        const data = snapshot.val();
+        orders = data ? Object.values(data) : [];
         setSyncStatus("ok");
         render();
-        setInterval(async () => {
-          try { orders = await fbRead(); render(); } catch { }
-        }, 8000);
-      } catch (e) {
+      }, (error) => {
         setSyncStatus("err");
-        showToast("Could not connect to Firebase", "err");
+        showToast("Could not sync with Firebase", "err");
+      });
+    }
+
+    function toggleAdmin() {
+      if (document.body.classList.contains("is-admin")) {
+        window.fbSignOut(window.fbAuth);
+        showToast("Logged out");
+      } else {
+        document.getElementById("admin-overlay").style.display = "flex";
+        setTimeout(() => document.getElementById("admin-email").focus(), 100);
       }
+    }
+
+    async function loginAdmin() {
+      const email = document.getElementById("admin-email").value.trim();
+      const pass = document.getElementById("admin-pass").value;
+      if (!email || !pass) return;
+
+      const btn = document.getElementById("admin-submit-btn");
+      btn.textContent = "LOGGING IN...";
+      btn.style.opacity = "0.7";
+      try {
+        await window.fbSignInWithEmailAndPassword(window.fbAuth, email, pass);
+        showToast("Logged in successfully!");
+        document.getElementById("admin-email").value = "";
+        document.getElementById("admin-pass").value = "";
+      } catch (e) {
+        showToast("Login failed: " + e.message, "err");
+      }
+      btn.textContent = "LOG IN";
+      btn.style.opacity = "1";
     }
 
     function setSyncStatus(state) {
@@ -900,7 +991,7 @@
         <div class="order-meta">${o.color} · Size ${o.size}</div>
       </div>
       <div class="qty-badge"><div class="qty-label">QTY</div><div class="qty-num">${o.qty}</div></div>
-      <div class="action-col">
+      <div class="action-col admin-only">
         <button class="btn-icon" onclick="openEdit('${o.id}')">✏️</button>
         <button class="btn-icon" style="border-color:#3a2020" onclick="askDelete('${o.id}')">🗑</button>
       </div>
