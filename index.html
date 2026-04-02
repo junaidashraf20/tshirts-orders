@@ -815,7 +815,21 @@
     function closeForm() { document.getElementById("form-overlay").style.display = "none"; }
     function overlayClick(e) { if (e.target === e.currentTarget) closeForm(); }
     function pickColor(c) { formColor = c; buildColorRow(); }
-    function pickSize(s) { formSize = s; buildSizeRow(); }
+    
+    function pickSize(s) { 
+      formSize = s; 
+      buildSizeRow();
+      const advice = {
+        "S": "S IS HUGE! IF YOU'RE M, S IS YOUR TRUE FIT.",
+        "M": "M IS LIKE A TENT. IF YOU'RE L, M IS FINE!",
+        "L": "L FOR LEGEND. PREPARE FOR MASSIVE VOLUME.",
+        "XL": "XL? ARE YOU WEARING A MOBILE ROOM??"
+      };
+      const el = document.getElementById("size-advice");
+      el.textContent = advice[s];
+      el.style.opacity = "1";
+    }
+    
     function changeQty(d) { formQty = Math.max(1, formQty + d); document.getElementById("qty-display").textContent = formQty; }
 
     function buildColorRow() {
@@ -828,27 +842,14 @@
           onclick="pickColor('${c}')">${c}</button>`;
       }).join("");
     }
+
     function buildSizeRow() {
-      const advice = {
-        "S": "S IS HUGE! IF YOU'RE M, S IS YOUR TRUE FIT.",
-        "M": "M IS LIKE A TENT. IF YOU'RE L, M IS FINE!",
-        "L": "L FOR LEGEND. PREPARE FOR MASSIVE VOLUME.",
-        "XL": "XL? ARE YOU WEARING A MOBILE ROOM??"
-      };
       document.getElementById("size-row").innerHTML = SIZES.map(s => {
         const sel = formSize === s;
         return `<button class="size-btn" 
           style="border:${sel ? '2px solid var(--accent)' : '1px solid var(--border)'};background:${sel ? 'var(--card)' : 'var(--bg)'};color:${sel ? 'var(--accent)' : 'var(--text-muted)'}" 
-          onmouseenter="showSizeAdvice('${advice[s]}')"
-          onmouseleave="hideSizeAdvice()"
           onclick="pickSize('${s}')">${s}</button>`;
       }).join("");
-    }
-
-    function showSizeAdvice(msg) {
-      const el = document.getElementById("size-advice");
-      el.textContent = msg;
-      el.style.opacity = "1";
     }
 
     function hideSizeAdvice() {
