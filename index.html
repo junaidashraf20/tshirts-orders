@@ -233,9 +233,9 @@
     .color-btn, .size-btn { flex: 1; padding: 14px 0; border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s; border: 1px solid var(--border); background: var(--card); color: var(--text-muted); }
     
     #size-advice {
-      font-size: 9px; font-weight: 800; color: var(--accent); letter-spacing: 1px;
-      text-transform: uppercase; text-align: left; height: 12px; margin-bottom: 6px;
-      opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      font-size: 10px; font-weight: 800; color: var(--accent); letter-spacing: 1px;
+      text-transform: uppercase; text-align: center; padding: 6px 0 8px; min-height: 28px;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none; display: block;
     }
     
     .qty-row { display: flex; align-items: center; gap: 20px; justify-content: center; padding: 10px 0; }
@@ -826,8 +826,10 @@
         "XL": "XL? ARE YOU WEARING A MOBILE ROOM??"
       };
       const el = document.getElementById("size-advice");
-      el.textContent = advice[s];
-      el.style.opacity = "1";
+      if (el) {
+        el.textContent = "\u2192 " + advice[s];
+        el.style.opacity = "1";
+      }
     }
     
     function changeQty(d) { formQty = Math.max(1, formQty + d); document.getElementById("qty-display").textContent = formQty; }
