@@ -78,10 +78,25 @@
       --card: #0a0a0a;
       --border: #1a1a1a;
       --accent: #a252ff;
+      --accent-hover: #b26bf3;
       --text: #f0f0f0;
       --text-muted: #555555;
       --success: #00ff88;
       --danger: #ff3344;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --card: #f8f9fa;
+        --border: #e0e0e0;
+        --accent: #892cdc;
+        --accent-hover: #9c27b0;
+        --text: #111111;
+        --text-muted: #777777;
+        --success: #00c853;
+        --danger: #d50000;
+      }
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -240,9 +255,38 @@
     .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Secretariat Option 2 UI constraints */
+    /* User Constraint Logic */
     .admin-only { display: none !important; }
     body.is-admin .admin-only { display: flex !important; }
+    .admin-only-block { display: none !important; }
+    body.is-admin .admin-only-block { display: block !important; }
+
+    .guest-only { display: flex; flex-direction: column; }
+    body.is-admin .guest-only { display: none !important; }
+
+    .guest-hero {
+      padding: 60px 20px 40px; text-align: center;
+    }
+    .guest-title {
+      font-family: 'Syncopate', sans-serif; font-size: 32px; font-weight: 700;
+      letter-spacing: -1.5px; text-transform: uppercase; margin-bottom: 8px; color: var(--text);
+    }
+    .guest-subtitle {
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .guest-queue-box {
+      margin: 24px auto 30px; display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 30px;
+    }
+    .queue-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+    .queue-text { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: var(--text); text-transform: uppercase; }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(162, 82, 255, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(162, 82, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(162, 82, 255, 0); }
+    }
 
     .export-btn {
       width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid var(--border);
@@ -279,8 +323,21 @@
 
 <body>
 
-  <!-- Main App -->
-  <div id="main-app">
+  <!-- GUEST LANDING PAGE -->
+  <div class="guest-only" id="guest-landing">
+    <div class="guest-hero">
+      <div class="guest-title">OUTOFMYMISERY</div>
+      <div class="guest-subtitle">Premium Streetwear</div>
+      <div class="guest-queue-box">
+        <div class="queue-dot"></div>
+        <div class="queue-text" id="guest-queue-count">0 ORDERS IN QUEUE</div>
+      </div>
+    </div>
+    <div id="guest-form-container" style="padding: 0 20px;"></div>
+  </div>
+
+  <!-- Main App (Admin Dashboard) -->
+  <div id="main-app" class="admin-only-block">
     <div class="header">
       <div class="header-top">
         <div>
@@ -372,12 +429,12 @@
     <button class="fab" onclick="openAdd()">+</button>
   </div>
 
-  <!-- Add/Edit Form -->
-  <div class="overlay" id="form-overlay" style="display:none;" onclick="overlayClick(event)">
-    <div class="sheet">
+  <!-- Add/Edit Form Overlay wrapper -->
+  <div class="overlay admin-only" id="form-overlay" style="display:none;" onclick="overlayClick(event)">
+    <div class="sheet" id="order-sheet">
       <div class="sheet-header">
         <div class="sheet-title" id="form-title">New Order</div>
-        <button class="sheet-close" onclick="closeForm()">✕</button>
+        <button class="sheet-close admin-only" id="sheet-close-btn" onclick="closeForm()">✕</button>
       </div>
       <div class="field">
         <div class="field-label">CUSTOMER NAME</div>
@@ -488,9 +545,16 @@
     }
 
     async function startApp() {
-      // Option 2: Secret URL Param Check
+      // Secret URL Param Check
       if (window.location.search.includes("admin=junaid339")) {
         document.body.classList.add("is-admin");
+      } else {
+        // Move form into the guest landing page automatically
+        const formSheet = document.getElementById("order-sheet");
+        formSheet.style.borderRadius = "24px";
+        formSheet.style.borderBottom = "1px solid var(--border)";
+        document.getElementById("guest-form-container").appendChild(formSheet);
+        openAdd();
       }
 
       setSyncStatus("loading");
@@ -566,6 +630,10 @@
         if (orderFilter === 'paid') filtered = orders.filter(o => o.paidAmount > 0);
         if (orderFilter === 'unpaid') filtered = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
       }
+
+      // Update Guest Queue Count
+      const unpaidOrdersCount = orders.filter(o => !o.paidAmount || o.paidAmount <= 0).length;
+      document.getElementById("guest-queue-count").textContent = unpaidOrdersCount > 0 ? `${unpaidOrdersCount} ORDERS IN QUEUE` : "NO ORDERS IN QUEUE";
 
       if (!filtered.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
       empty.style.display = "none";
@@ -659,12 +727,15 @@
       editId = null; formColor = "Black"; formSize = "M"; formQty = 1;
       document.getElementById("f-name").value = "";
       document.getElementById("f-paid").value = "";
-      document.getElementById("form-title").textContent = "New Order";
-      document.getElementById("submit-btn").textContent = "ADD ORDER";
+      document.getElementById("form-title").textContent = "NEW ORDER";
+      document.getElementById("submit-btn").textContent = "PLACE ORDER";
       document.getElementById("qty-display").textContent = 1;
       buildColorRow(); buildSizeRow();
-      document.getElementById("form-overlay").style.display = "flex";
-      setTimeout(() => document.getElementById("f-name").focus(), 100);
+      
+      if (document.body.classList.contains('is-admin')) {
+        document.getElementById("form-overlay").style.display = "flex";
+        setTimeout(() => document.getElementById("f-name").focus(), 100);
+      }
     }
 
     function openEdit(id) {
@@ -688,7 +759,11 @@
     function buildColorRow() {
       document.getElementById("color-row").innerHTML = COLORS.map(c => {
         const cm = COLOR_META[c], sel = formColor === c;
-        return `<button class="color-btn" style="background:var(--bg);color:var(--text);border:${sel ? '2px solid var(--accent)' : `1px solid var(--border)`};font-weight:${sel ? 800 : 800}" onclick="pickColor('${c}')">${c}</button>`;
+        return `<button class="color-btn" 
+          style="background:${sel ? cm.bg : 'var(--card)'};color:${sel ? cm.text : 'var(--text)'};border:${sel ? '2px solid var(--accent)' : `1px solid var(--border)`};font-weight:800; transition:all 0.15s ease;" 
+          onmouseenter="if(!${sel}) { this.style.background='${cm.bg}'; this.style.color='${cm.text}'; }"
+          onmouseleave="if(!${sel}) { this.style.background='var(--card)'; this.style.color='var(--text)'; }"
+          onclick="pickColor('${c}')">${c}</button>`;
       }).join("");
     }
     function buildSizeRow() {
