@@ -457,11 +457,11 @@
     <button class="fab" onclick="openAdd()">+</button>
   </div>
 
-  <!-- Add/Edit Form Overlay wrapper -->
-  <div class="overlay admin-only" id="form-overlay" style="display:none;" onclick="overlayClick(event)">
+  <!-- Add/Edit Form Overlay wrapper (Controlled by JS, no admin-only class) -->
+  <div class="overlay" id="form-overlay" style="display:none;" onclick="overlayClick(event)">
     <div class="sheet" id="order-sheet">
       <div class="sheet-header">
-        <div class="sheet-title" id="form-title">New Order</div>
+        <div class="sheet-title" id="form-title">NEW ORDER</div>
         <button class="sheet-close admin-only" id="sheet-close-btn" onclick="closeForm()">✕</button>
       </div>
       <div class="field">
@@ -756,7 +756,7 @@
       
       if (isHidden) {
         container.style.display = "block";
-        btn.textContent = "✕ CLOSE FORM";
+        btn.textContent = "✕ CANCEL";
         btn.style.background = "var(--danger)";
         btn.style.color = "white";
         // smooth scroll
