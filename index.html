@@ -719,6 +719,7 @@
       }
     }
 
+    /* Temporarily disabled Admin UI restrictions
     .admin-only {
       display: none !important;
     }
@@ -726,6 +727,7 @@
     body.is-admin .admin-only {
       display: flex !important;
     }
+    */
 
     .admin-toggle {
       font-size: 14px;
@@ -756,8 +758,8 @@
           <div class="header-title">T-SHIRT ORDERS</div>
         </div>
         <div>
-          <div class="header-total-label">TOTAL <button id="admin-toggle-btn" class="admin-toggle"
-              onclick="toggleAdmin()">🔒</button></div>
+          <div class="header-total-label">TOTAL <!-- Temporarily Disable Admin Toggle <button id="admin-toggle-btn" class="admin-toggle"
+              onclick="toggleAdmin()">🔒</button> --></div>
           <div class="header-total-num" id="grand-total">0</div>
         </div>
       </div>
@@ -850,7 +852,7 @@
     </div>
   </div>
 
-  <!-- Admin Login Form -->
+  <!-- Admin Login Form (Temporarily Disabled)
   <div class="overlay" id="admin-overlay" style="display:none;"
     onclick="if(event.target===this) this.style.display='none'">
     <div class="sheet">
@@ -859,8 +861,8 @@
         <button class="sheet-close" onclick="document.getElementById('admin-overlay').style.display='none'">✕</button>
       </div>
       <div class="field">
-        <div class="field-label">EMAIL</div>
-        <input class="field-input" id="admin-email" type="email" placeholder="admin@example.com" autocomplete="off" />
+        <div class="field-label">ADMIN ID</div>
+        <input class="field-input" id="admin-id" type="text" placeholder="e.g. junaid339" autocomplete="off" />
       </div>
       <div class="field">
         <div class="field-label">PASSWORD</div>
@@ -870,6 +872,7 @@
       <button class="submit-btn" id="admin-submit-btn" onclick="loginAdmin()">LOG IN</button>
     </div>
   </div>
+  -->
 
   <div class="toast" id="toast" style="display:none;"></div>
 
@@ -904,8 +907,8 @@
     function startApp() {
       setSyncStatus("loading");
 
-      // Auth Listener
-      window.fbOnAuthStateChanged(window.fbAuth, (user) => {
+      // Auth Listener (Temporarily Disabled)
+      /* window.fbOnAuthStateChanged(window.fbAuth, (user) => {
         if (user) {
           document.body.classList.add("is-admin");
           document.getElementById("admin-toggle-btn").textContent = "🔓";
@@ -914,7 +917,7 @@
           document.body.classList.remove("is-admin");
           document.getElementById("admin-toggle-btn").textContent = "🔒";
         }
-      });
+      }); */
 
       // DB Listener
       const ordersRef = window.fbRef(window.fbDb, "orders");
@@ -935,14 +938,17 @@
         showToast("Logged out");
       } else {
         document.getElementById("admin-overlay").style.display = "flex";
-        setTimeout(() => document.getElementById("admin-email").focus(), 100);
+        setTimeout(() => document.getElementById("admin-id").focus(), 100);
       }
     }
 
     async function loginAdmin() {
-      const email = document.getElementById("admin-email").value.trim();
+      const adminId = document.getElementById("admin-id").value.trim();
       const pass = document.getElementById("admin-pass").value;
-      if (!email || !pass) return;
+      if (!adminId || !pass) return;
+
+      // Firebase requires an email format. We map the custom ID to a generic backend admin email instance.
+      const email = adminId + "@tshirt-app-admin.com";
 
       const btn = document.getElementById("admin-submit-btn");
       btn.textContent = "LOGGING IN...";
@@ -950,7 +956,7 @@
       try {
         await window.fbSignInWithEmailAndPassword(window.fbAuth, email, pass);
         showToast("Logged in successfully!");
-        document.getElementById("admin-email").value = "";
+        document.getElementById("admin-id").value = "";
         document.getElementById("admin-pass").value = "";
       } catch (e) {
         showToast("Login failed: " + e.message, "err");
