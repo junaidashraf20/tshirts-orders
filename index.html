@@ -62,6 +62,7 @@
         console.error("Firebase Error:", err);
       });
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 
 
@@ -116,7 +117,7 @@
     }
 
     .header-total-label { font-size: 10px; color: var(--text-muted); letter-spacing: 2px; text-align: right; font-weight: 800; text-transform: uppercase; }
-    .header-total-num { font-size: 28px; font-weight: 800; color: var(--accent); text-align: right; line-height: 1; margin-top: 4px; }
+    .header-total-num { font-size: 32px; font-weight: 800; color: var(--accent); text-align: right; line-height: 1; margin-top: 4px; font-family: 'Syncopate', sans-serif; }
 
     .sync-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; letter-spacing: 1px; padding: 5px 12px; border-radius: 20px; margin-top: 12px; text-transform: uppercase; border: 1px solid var(--border); }
     .sync-dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -242,6 +243,20 @@
     /* Secretariat Option 2 UI constraints */
     .admin-only { display: none !important; }
     body.is-admin .admin-only { display: flex !important; }
+
+    .export-btn {
+      width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .export-btn:active { background: #1a1a1a; }
+
+    .payment-status {
+      font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; margin-top: 6px;
+      display: inline-block; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .status-paid { background: rgba(0, 255, 136, 0.1); color: var(--success); border: 1px solid rgba(0, 255, 136, 0.2); }
+    .status-unpaid { background: rgba(255, 51, 68, 0.1); color: var(--danger); border: 1px solid rgba(255, 51, 68, 0.2); }
   </style>
 
 </head>
@@ -283,7 +298,16 @@
         </div>
       </div>
       <div id="view-summary" style="display:none;">
-        <div class="gap-stack">
+        <button class="export-btn" id="export-pdf-btn" onclick="exportSummaryToPdf()">
+          <span>📄</span> EXPORT DEALER PDF
+        </button>
+        <div id="pdf-content" class="gap-stack" style="padding:20px; background:#000000; color:#ffffff;">
+          <!-- PDF Header (Hidden on Page, shown in PDF) -->
+          <div style="margin-bottom:30px; border-bottom:1px solid #1a1a1a; padding-bottom:15px;">
+            <div style="font-family:'Syncopate',sans-serif;font-size:28px;font-weight:700;color:#a252ff;margin-bottom:8px;">OUTOFMYMISERY</div>
+            <div style="font-size:11px;letter-spacing:3px;color:#888888;text-transform:uppercase;font-weight:800;">PRODUCTION ORDER SUMMARY</div>
+          </div>
+
           <div class="summary-table">
             <div class="summary-head">
               <div class="summary-head-cell">COLOR</div>
@@ -296,10 +320,11 @@
             <div class="summary-foot" id="summary-foot"></div>
           </div>
           <div class="size-cards" id="size-cards"></div>
-          <div class="all-orders-table" id="all-orders-table" style="display:none;">
-            <div class="all-orders-head">ALL ORDERS</div>
-            <div id="all-orders-rows"></div>
-          </div>
+        </div>
+
+        <div class="all-orders-table" id="all-orders-table" style="display:none; margin-top:20px;">
+          <div class="all-orders-head">ALL ORDERS (INTERNAL)</div>
+          <div id="all-orders-rows"></div>
         </div>
       </div>
     </div>
@@ -334,6 +359,11 @@
           <div class="qty-val" id="qty-display">1</div>
           <button class="qty-btn" onclick="changeQty(1)">+</button>
         </div>
+      </div>
+      <div class="field admin-only">
+        <div class="field-label">AMOUNT PAID (ADMIN ONLY)</div>
+        <input class="field-input" id="f-paid" type="number" placeholder="e.g. 500" autocomplete="off"
+          onkeydown="if(event.key==='Enter')submitForm()">
       </div>
       <button class="submit-btn" id="submit-btn" onclick="submitForm()">ADD ORDER</button>
     </div>
@@ -499,6 +529,10 @@
       <div class="order-info">
         <div class="order-name">${esc(o.name)}</div>
         <div class="order-meta">${o.color} · Size ${o.size}</div>
+        ${document.body.classList.contains('is-admin') ? 
+          `<div class="payment-status ${o.paidAmount > 0 ? 'status-paid' : 'status-unpaid'}">
+            ${o.paidAmount > 0 ? `PAID: ${o.paidAmount}` : 'UNPAID'}
+          </div>` : ''}
       </div>
       <div class="qty-badge"><div class="qty-label">QTY</div><div class="qty-num">${o.qty}</div></div>
       <div class="action-col admin-only">
@@ -533,10 +567,10 @@
       document.getElementById("all-orders-rows").innerHTML = orders.map((o, i) => {
         const cm = COLOR_META[o.color];
         return `<div class="all-orders-row">
-      <div style="font-size:11px;color:#444;min-width:18px">${i + 1}</div>
+      <div style="font-size:11px;color:var(--text-muted);min-width:18px">${i + 1}</div>
       <div style="width:8px;height:8px;border-radius:50%;background:${cm.bg};border:1px solid ${cm.dot};flex-shrink:0"></div>
       <div class="all-name">${esc(o.name)}</div>
-      <div class="all-meta">${o.color} · ${o.size}</div>
+      <div class="all-meta">${o.color} · ${o.size} ${document.body.classList.contains('is-admin') && o.paidAmount > 0 ? `<br><span style="color:var(--success); font-size:9px">PAID ${o.paidAmount}</span>` : ''}</div>
       <div class="all-qty">×${o.qty}</div></div>`;
       }).join("");
     }
@@ -553,6 +587,7 @@
     function openAdd() {
       editId = null; formColor = "Black"; formSize = "M"; formQty = 1;
       document.getElementById("f-name").value = "";
+      document.getElementById("f-paid").value = "";
       document.getElementById("form-title").textContent = "New Order";
       document.getElementById("submit-btn").textContent = "ADD ORDER";
       document.getElementById("qty-display").textContent = 1;
@@ -565,6 +600,7 @@
       const o = orders.find(x => x.id === id); if (!o) return;
       editId = id; formColor = o.color; formSize = o.size; formQty = o.qty;
       document.getElementById("f-name").value = o.name;
+      document.getElementById("f-paid").value = o.paidAmount || "";
       document.getElementById("form-title").textContent = "Edit Order";
       document.getElementById("submit-btn").textContent = "UPDATE ORDER";
       document.getElementById("qty-display").textContent = formQty;
@@ -593,6 +629,9 @@
 
     async function submitForm() {
       const name = document.getElementById("f-name").value.trim();
+      const paidStr = document.getElementById("f-paid").value || "0";
+      const paidAmount = parseFloat(paidStr) || 0;
+
       if (!name) { showToast("Enter a name", "err"); return; }
       if (saving) return;
       saving = true;
@@ -600,9 +639,9 @@
       btn.textContent = "SAVING..."; btn.style.opacity = "0.7";
       setSyncStatus("loading");
       if (editId) {
-        orders = orders.map(o => o.id === editId ? { ...o, name, color: formColor, size: formSize, qty: formQty } : o);
+        orders = orders.map(o => o.id === editId ? { ...o, name, color: formColor, size: formSize, qty: formQty, paidAmount } : o);
       } else {
-        orders.push({ id: uid(), name, color: formColor, size: formSize, qty: formQty });
+        orders.push({ id: uid(), name, color: formColor, size: formSize, qty: formQty, paidAmount });
       }
       try {
         await fbWrite(orders);
@@ -637,6 +676,26 @@
 
     function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+    async function exportSummaryToPdf() {
+      const element = document.getElementById('pdf-content');
+      const opt = {
+        margin: [10, 10],
+        filename: `OUTOFMYMISERY_Orders_Summary_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, backgroundColor: '#000000', useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      showToast("Generating PDF...");
+      try {
+        await html2pdf().set(opt).from(element).save();
+        showToast("PDF Downloaded!");
+      } catch (e) {
+        showToast("PDF Export failed", "err");
+        console.error(e);
+      }
+    }
 
     startApp();
   </script>
