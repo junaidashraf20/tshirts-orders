@@ -317,6 +317,24 @@
       text-transform: uppercase; margin: 30px 0 15px; border-left: 2px solid var(--accent); padding-left: 10px;
     }
     .summary-section-title.first { margin-top: 0; }
+
+    .guest-stats-row {
+      display: flex; gap: 12px; justify-content: center; margin-bottom: 30px; margin-top: 20px;
+    }
+    .guest-stat-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 20px;
+      text-align: center; flex: 1; max-width: 160px;
+    }
+    .guest-stat-num { font-family: 'Syncopate', sans-serif; font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+    .guest-stat-label { font-size: 9px; font-weight: 800; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; }
+
+    .cta-btn {
+      width: 100%; max-width: 320px; margin: 10px auto 40px; padding: 18px; border-radius: 12px;
+      background: var(--text); color: var(--bg); font-size: 13px; font-weight: 800;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer; border: none;
+      display: flex; align-items: center; justify-content: center; transition: 0.3s;
+    }
+    .cta-btn:hover { background: var(--accent); color: white; transform: translateY(-2px); }
   </style>
 
 </head>
@@ -326,18 +344,28 @@
   <!-- GUEST LANDING PAGE -->
   <div class="guest-only" id="guest-landing">
     <div class="guest-hero">
+      <div class="guest-subtitle" style="margin-bottom:10px">EST. 2024</div>
       <div class="guest-title">OUTOFMYMISERY</div>
-      <div class="guest-subtitle">Premium Streetwear</div>
-      <div class="guest-queue-box">
-        <div class="queue-dot"></div>
-        <div class="queue-text" id="guest-queue-count">0 ORDERS IN QUEUE</div>
+      <div class="guest-subtitle">PREMIUM STREETWEAR</div>
+      
+      <div class="guest-stats-row">
+        <div class="guest-stat-card">
+          <div class="guest-stat-num" id="stat-delivered">0</div>
+          <div class="guest-stat-label">DELIVERED</div>
+        </div>
+        <div class="guest-stat-card">
+          <div class="guest-stat-num" id="stat-processing" style="color:var(--accent)">0</div>
+          <div class="guest-stat-label">NEW ORDERS</div>
+        </div>
       </div>
+
+      <button class="cta-btn" id="guest-cta" onclick="toggleGuestForm()">PLACE NEW ORDER</button>
     </div>
-    <div id="guest-form-container" style="padding: 0 20px;"></div>
+    <div id="guest-form-container" style="padding: 0 20px; display:none;"></div>
   </div>
 
   <!-- Main App (Admin Dashboard) -->
-  <div id="main-app" class="admin-only-block">
+  <div id="main-app" class="admin-only-block" style="display:none;">
     <div class="header">
       <div class="header-top">
         <div>
@@ -548,11 +576,12 @@
       // Secret URL Param Check
       if (window.location.search.includes("admin=junaid339")) {
         document.body.classList.add("is-admin");
+        document.getElementById("main-app").style.display = "block";
       } else {
-        // Move form into the guest landing page automatically
+        // Move form into the guest landing page for static display
         const formSheet = document.getElementById("order-sheet");
         formSheet.style.borderRadius = "24px";
-        formSheet.style.borderBottom = "1px solid var(--border)";
+        formSheet.style.border = "1px solid var(--border)";
         document.getElementById("guest-form-container").appendChild(formSheet);
         openAdd();
       }
@@ -615,8 +644,18 @@
 
     function render() {
       const total = orders.reduce((s, o) => s + o.qty, 0);
+      const paidOrders = orders.filter(o => o.paidAmount > 0);
+      const unpaidOrders = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
+
       document.getElementById("grand-total").textContent = total;
       document.getElementById("order-count").textContent = orders.length;
+      
+      // Update Guest Metrics
+      const statDelivered = document.getElementById("stat-delivered");
+      const statProcessing = document.getElementById("stat-processing");
+      if (statDelivered) statDelivered.textContent = paidOrders.length;
+      if (statProcessing) statProcessing.textContent = unpaidOrders.length;
+
       renderOrders();
       if (activeTab === "summary") renderSummary();
     }
@@ -630,10 +669,6 @@
         if (orderFilter === 'paid') filtered = orders.filter(o => o.paidAmount > 0);
         if (orderFilter === 'unpaid') filtered = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
       }
-
-      // Update Guest Queue Count
-      const unpaidOrdersCount = orders.filter(o => !o.paidAmount || o.paidAmount <= 0).length;
-      document.getElementById("guest-queue-count").textContent = unpaidOrdersCount > 0 ? `${unpaidOrdersCount} ORDERS IN QUEUE` : "NO ORDERS IN QUEUE";
 
       if (!filtered.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
       empty.style.display = "none";
@@ -712,6 +747,26 @@
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       document.getElementById('filter-' + f).classList.add('active');
       renderOrders();
+    }
+
+    function toggleGuestForm() {
+      const container = document.getElementById("guest-form-container");
+      const btn = document.getElementById("guest-cta");
+      const isHidden = container.style.display === "none";
+      
+      if (isHidden) {
+        container.style.display = "block";
+        btn.textContent = "✕ CLOSE FORM";
+        btn.style.background = "var(--danger)";
+        btn.style.color = "white";
+        // smooth scroll
+        setTimeout(() => container.scrollIntoView({ behavior: 'smooth' }), 100);
+      } else {
+        container.style.display = "none";
+        btn.textContent = "PLACE NEW ORDER";
+        btn.style.background = "var(--text)";
+        btn.style.color = "var(--bg)";
+      }
     }
 
     function switchTab(t) {
