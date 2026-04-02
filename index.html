@@ -257,6 +257,22 @@
     }
     .status-paid { background: rgba(0, 255, 136, 0.1); color: var(--success); border: 1px solid rgba(0, 255, 136, 0.2); }
     .status-unpaid { background: rgba(255, 51, 68, 0.1); color: var(--danger); border: 1px solid rgba(255, 51, 68, 0.2); }
+
+    .filter-bar {
+      display: flex; gap: 8px; margin-bottom: 20px;
+    }
+    .filter-btn {
+      flex: 1; padding: 10px 0; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--card); color: var(--text-muted); font-size: 10px; font-weight: 800;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: 0.2s;
+    }
+    .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(162, 82, 255, 0.05); }
+
+    .summary-section-title {
+      font-size: 11px; font-weight: 800; color: var(--text-muted); letter-spacing: 2px;
+      text-transform: uppercase; margin: 30px 0 15px; border-left: 2px solid var(--accent); padding-left: 10px;
+    }
+    .summary-section-title.first { margin-top: 0; }
   </style>
 
 </head>
@@ -290,6 +306,11 @@
 
     <div class="content">
       <div id="view-orders">
+        <div class="filter-bar admin-only">
+          <button class="filter-btn active" id="filter-all" onclick="setOrderFilter('all')">ALL</button>
+          <button class="filter-btn" id="filter-paid" onclick="setOrderFilter('paid')">PAID</button>
+          <button class="filter-btn" id="filter-unpaid" onclick="setOrderFilter('unpaid')">UNPAID</button>
+        </div>
         <div id="order-list" class="order-list"></div>
         <div id="empty-state" class="empty" style="display:none;">
           <div class="empty-icon">👕</div>
@@ -299,15 +320,34 @@
       </div>
       <div id="view-summary" style="display:none;">
         <button class="export-btn" id="export-pdf-btn" onclick="exportSummaryToPdf()">
-          <span>📄</span> EXPORT DEALER PDF
+          <span>📄</span> EXPORT UNPAID LIST TO DEALER
         </button>
-        <div id="pdf-content" class="gap-stack" style="padding:20px; background:#000000; color:#ffffff;">
-          <!-- PDF Header (Hidden on Page, shown in PDF) -->
-          <div style="margin-bottom:30px; border-bottom:1px solid #1a1a1a; padding-bottom:15px;">
-            <div style="font-family:'Syncopate',sans-serif;font-size:28px;font-weight:700;color:#a252ff;margin-bottom:8px;">OUTOFMYMISERY</div>
-            <div style="font-size:11px;letter-spacing:3px;color:#888888;text-transform:uppercase;font-weight:800;">PRODUCTION ORDER SUMMARY</div>
-          </div>
 
+        <div id="pdf-content" style="background:#000000; color:#ffffff;">
+          <!-- PDF Container (Dealer Focus: Unpaid only) -->
+          <div style="padding:20px;">
+            <div style="margin-bottom:30px; border-bottom:1px solid #1a1a1a; padding-bottom:15px;">
+              <div style="font-family:'Syncopate',sans-serif;font-size:28px;font-weight:700;color:#a252ff;margin-bottom:8px;">OUTOFMYMISERY</div>
+              <div style="font-size:11px;letter-spacing:3px;color:#888888;text-transform:uppercase;font-weight:800;">DEALER PRODUCTION LIST (UNPAID)</div>
+            </div>
+            
+            <div class="summary-table">
+              <div class="summary-head">
+                <div class="summary-head-cell">COLOR</div>
+                <div class="summary-head-cell" style="text-align:center">S</div>
+                <div class="summary-head-cell" style="text-align:center">M</div>
+                <div class="summary-head-cell" style="text-align:center">L</div>
+                <div class="summary-head-cell" style="text-align:right">TOTAL</div>
+              </div>
+              <div id="summary-rows-unpaid"></div>
+              <div class="summary-foot" id="summary-foot-unpaid"></div>
+            </div>
+            <div class="size-cards" id="size-cards-unpaid" style="margin-top:20px;"></div>
+          </div>
+        </div>
+
+        <div class="summary-section-title">PAID ORDERS SUMMARY</div>
+        <div class="gap-stack">
           <div class="summary-table">
             <div class="summary-head">
               <div class="summary-head-cell">COLOR</div>
@@ -316,14 +356,14 @@
               <div class="summary-head-cell" style="text-align:center">L</div>
               <div class="summary-head-cell" style="text-align:right">TOTAL</div>
             </div>
-            <div id="summary-rows"></div>
-            <div class="summary-foot" id="summary-foot"></div>
+            <div id="summary-rows-paid"></div>
+            <div class="summary-foot" id="summary-foot-paid"></div>
           </div>
-          <div class="size-cards" id="size-cards"></div>
+          <div class="size-cards" id="size-cards-paid"></div>
         </div>
 
-        <div class="all-orders-table" id="all-orders-table" style="display:none; margin-top:20px;">
-          <div class="all-orders-head">ALL ORDERS (INTERNAL)</div>
+        <div class="all-orders-table" id="all-orders-table" style="display:none; margin-top:30px;">
+          <div class="all-orders-head">ALL ORDERS (LOG)</div>
           <div id="all-orders-rows"></div>
         </div>
       </div>
@@ -422,6 +462,7 @@
     let formSize = "M";
     let toastTimer = null;
     let activeTab = "orders";
+    let orderFilter = "all";
     let dbUrl = "https://tshirt-orders-44725-default-rtdb.firebaseio.com";
     let saving = false;
 
@@ -519,9 +560,16 @@
     function renderOrders() {
       const list = document.getElementById("order-list");
       const empty = document.getElementById("empty-state");
-      if (!orders.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
+      
+      let filtered = orders;
+      if (document.body.classList.contains('is-admin')) {
+        if (orderFilter === 'paid') filtered = orders.filter(o => o.paidAmount > 0);
+        if (orderFilter === 'unpaid') filtered = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
+      }
+
+      if (!filtered.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
       empty.style.display = "none";
-      list.innerHTML = orders.map((o, i) => {
+      list.innerHTML = filtered.map((o, i) => {
         const cm = COLOR_META[o.color];
         return `<div class="order-card">
       <div class="order-idx">${i + 1}</div>
@@ -544,23 +592,39 @@
     }
 
     function renderSummary() {
-      const g = {};
-      COLORS.forEach(c => { g[c] = {}; SIZES.forEach(s => g[c][s] = 0); });
-      orders.forEach(({ color, size, qty }) => { g[color][size] += qty; });
-      document.getElementById("summary-rows").innerHTML = COLORS.map(color => {
-        const cm = COLOR_META[color];
-        const rt = SIZES.reduce((s, sz) => s + g[color][sz], 0);
-        return `<div class="summary-row">
-      <div class="summary-color"><div class="summary-dot" style="background:${cm.bg};border:1px solid ${cm.dot}"></div>${color}</div>
-      ${SIZES.map(s => `<div class="sum-cell ${g[color][s] > 0 ? 'nonzero' : 'zero'}">${g[color][s]}</div>`).join("")}
-      <div class="sum-total">${rt}</div></div>`;
-      }).join("");
-      const st = SIZES.map(s => COLORS.reduce((sum, c) => sum + g[c][s], 0));
-      const gt = orders.reduce((s, o) => s + o.qty, 0);
-      document.getElementById("summary-foot").innerHTML =
-        `<div class="foot-label">TOTAL</div>${st.map(t => `<div class="foot-cell">${t}</div>`).join("")}<div class="foot-grand">${gt}</div>`;
-      document.getElementById("size-cards").innerHTML = SIZES.map((s, i) =>
-        `<div class="size-card"><div class="size-card-label">SIZE ${s}</div><div class="size-card-num">${st[i]}</div></div>`).join("");
+      const calculateSummary = (data) => {
+        const g = {};
+        COLORS.forEach(c => { g[c] = {}; SIZES.forEach(s => g[c][s] = 0); });
+        data.forEach(({ color, size, qty }) => { if (g[color]) g[color][size] += qty; });
+        return g;
+      };
+
+      const unpaidOrders = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
+      const paidOrders = orders.filter(o => o.paidAmount > 0);
+
+      const renderGrid = (g, rowsId, footId, cardsId, dataPool) => {
+        document.getElementById(rowsId).innerHTML = COLORS.map(color => {
+          const cm = COLOR_META[color];
+          const rt = SIZES.reduce((s, sz) => s + g[color][sz], 0);
+          return `<div class="summary-row">
+            <div class="summary-color"><div class="summary-dot" style="background:${cm.bg};border:1px solid ${cm.dot}"></div>${color}</div>
+            ${SIZES.map(s => `<div class="sum-cell ${g[color][s] > 0 ? 'nonzero' : 'zero'}">${g[color][s]}</div>`).join("")}
+            <div class="sum-total">${rt}</div></div>`;
+        }).join("");
+        const st = SIZES.map(s => COLORS.reduce((sum, c) => sum + g[c][s], 0));
+        const gt = dataPool.reduce((s, o) => s + o.qty, 0);
+        document.getElementById(footId).innerHTML =
+          `<div class="foot-label">TOTAL</div>${st.map(t => `<div class="foot-cell">${t}</div>`).join("")}<div class="foot-grand">${gt}</div>`;
+        document.getElementById(cardsId).innerHTML = SIZES.map((s, i) =>
+          `<div class="size-card"><div class="size-card-label">SIZE ${s}</div><div class="size-card-num">${st[i]}</div></div>`).join("");
+      };
+
+      const gUnpaid = calculateSummary(unpaidOrders);
+      const gPaid = calculateSummary(paidOrders);
+
+      renderGrid(gUnpaid, "summary-rows-unpaid", "summary-foot-unpaid", "size-cards-unpaid", unpaidOrders);
+      renderGrid(gPaid, "summary-rows-paid", "summary-foot-paid", "size-cards-paid", paidOrders);
+
       const tbl = document.getElementById("all-orders-table");
       if (!orders.length) { tbl.style.display = "none"; return; }
       tbl.style.display = "block";
@@ -573,6 +637,13 @@
       <div class="all-meta">${o.color} · ${o.size} ${document.body.classList.contains('is-admin') && o.paidAmount > 0 ? `<br><span style="color:var(--success); font-size:9px">PAID ${o.paidAmount}</span>` : ''}</div>
       <div class="all-qty">×${o.qty}</div></div>`;
       }).join("");
+    }
+
+    function setOrderFilter(f) {
+      orderFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('filter-' + f).classList.add('active');
+      renderOrders();
     }
 
     function switchTab(t) {
