@@ -719,7 +719,7 @@
       }
     }
 
-    /* Temporarily disabled Admin UI restrictions
+    /* Secretariat Option 2 UI constraints */
     .admin-only {
       display: none !important;
     }
@@ -727,7 +727,6 @@
     body.is-admin .admin-only {
       display: flex !important;
     }
-    */
 
     .admin-toggle {
       font-size: 14px;
@@ -805,7 +804,7 @@
       </div>
     </div>
 
-    <button class="fab admin-only" onclick="openAdd()">+</button>
+    <button class="fab" onclick="openAdd()">+</button>
   </div>
 
   <!-- Add/Edit Form -->
@@ -918,6 +917,11 @@
     }
 
     async function startApp() {
+      // Option 2: Secret URL Param Check
+      if (window.location.search.includes("admin=junaid339")) {
+        document.body.classList.add("is-admin");
+      }
+
       setSyncStatus("loading");
       try {
         orders = await fbRead();
