@@ -1,0 +1,10 @@
+{
+  "name": "tshirt-orders-app",
+  "version": "1.0.0",
+  "description": "T-Shirt Orders Application",
+  "scripts": {
+    "generate-config": "node generate-config.js",
+    "prebuild": "node generate-config.js",
+    "deploy": "npm run generate-config && firebase deploy"
+  }
+}
