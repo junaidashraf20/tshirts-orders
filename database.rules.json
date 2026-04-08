@@ -1,0 +1,36 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "orders": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["id", "name"],
+      "$orderid": {
+        ".validate": "newData.hasChildren(['id', 'name', 'color', 'size', 'qty', 'paidAmount'])",
+        "id": {
+          ".validate": "newData.val() == $orderid"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "color": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "size": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "qty": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "paidAmount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        }
+      }
+    },
+    "maintenance_mode": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}

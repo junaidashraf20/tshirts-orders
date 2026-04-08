@@ -549,26 +549,122 @@
     let orderFilter = "all";
     let dbUrl = "https://tshirt-orders-44725-default-rtdb.firebaseio.com";
     let saving = false;
+    let isSyncing = false;
+    let lastSyncTime = 0;
+    const SYNC_DEBOUNCE_MS = 1000; // Prevent sync conflicts
 
     // ── Firebase REST helpers ──────────────────────────────────────────────────
     function fbUrl() { return dbUrl.replace(/\/?$/, "") + "/orders.json"; }
 
     async function fbRead() {
-      const r = await fetch(fbUrl());
-      if (!r.ok) throw new Error("Read failed: " + r.status);
-      const data = await r.json();
-      return data ? Object.values(data) : [];
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        
+        const r = await fetch(fbUrl(), { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!r.ok) {
+          const errorText = await r.text();
+          throw new Error(`Read failed (HTTP ${r.status}): ${errorText || r.statusText}`);
+        }
+        
+        const data = await r.json();
+        console.log("✅ fbRead success:", data ? Object.keys(data).length + " orders" : "empty");
+        
+        if (!data) return [];
+        
+        // Convert object to array and ensure all fields are present
+        const orderArray = Object.values(data);
+        return orderArray.map(o => ({
+          id: o.id || "",
+          name: o.name || "",
+          color: o.color || "Black",
+          size: o.size || "M",
+          qty: parseInt(o.qty) || 1,
+          paidAmount: parseFloat(o.paidAmount) || 0
+        }));
+      } catch (e) {
+        console.error("❌ fbRead error:", e.message);
+        throw e;
+      }
     }
 
     async function fbWrite(list) {
-      const obj = {};
-      list.forEach(o => { obj[o.id] = o; });
-      const r = await fetch(fbUrl(), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(obj)
-      });
-      if (!r.ok) throw new Error("Write failed: " + r.status);
+      try {
+        // Validate all orders have required fields
+        const obj = {};
+        for (const o of list) {
+          if (!o.id) throw new Error("Order missing ID");
+          obj[o.id] = {
+            id: o.id,
+            name: o.name || "",
+            color: o.color || "Black",
+            size: o.size || "M",
+            qty: parseInt(o.qty) || 1,
+            paidAmount: parseFloat(o.paidAmount) || 0
+          };
+        }
+        
+        const jsonBody = JSON.stringify(obj);
+        console.log("📝 fbWrite attempting, size:", jsonBody.length + " bytes");
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        const r = await fetch(fbUrl(), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: jsonBody,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (!r.ok) {
+          const errorText = await r.text();
+          throw new Error(`Write failed (HTTP ${r.status}): ${errorText || r.statusText}`);
+        }
+        
+        const result = await r.json();
+        console.log("✅ fbWrite success");
+        return result;
+      } catch (e) {
+        console.error("❌ fbWrite error:", e.message);
+        throw e;
+      }
+    }
+
+    let syncIntervalId = null;
+
+    async function syncData() {
+      // Prevent concurrent syncs and respect debounce
+      if (isSyncing) {
+        console.log("⏳ Sync already in progress, skipping");
+        return;
+      }
+      
+      if (Date.now() - lastSyncTime < SYNC_DEBOUNCE_MS) {
+        console.log("⏱️ Sync debounce active");
+        return;
+      }
+      
+      isSyncing = true;
+      try {
+        const newOrders = await fbRead();
+        // Only update if data actually changed
+        if (JSON.stringify(orders) !== JSON.stringify(newOrders)) {
+          orders = newOrders;
+          render();
+          console.log("🔄 Data synced from server");
+        }
+        setSyncStatus("ok");
+        lastSyncTime = Date.now();
+      } catch (e) {
+        console.error("Sync error:", e.message);
+        setSyncStatus("err");
+      } finally {
+        isSyncing = false;
+      }
     }
 
     async function startApp() {
@@ -590,10 +686,13 @@
         orders = await fbRead();
         setSyncStatus("ok");
         render();
-        setInterval(async () => {
-          try { orders = await fbRead(); render(); } catch { }
+        // Set up automatic sync interval
+        syncIntervalId = setInterval(() => {
+          syncData().catch(e => console.error("Background sync failed:", e));
         }, 8000);
+        console.log("✅ App started, sync interval enabled");
       } catch (e) {
+        console.error("App startup error:", e);
         setSyncStatus("err");
         showToast("Could not connect to Firebase", "err");
       }
@@ -633,22 +732,57 @@
     }
 
     function setSyncStatus(state) {
-      const badge = document.getElementById("sync-badge");
-      const dot = badge.querySelector(".sync-dot");
-      const label = document.getElementById("sync-status");
-      if (state === "ok") { badge.style.background = "#0f2a0f"; badge.style.color = "#6abf6a"; dot.style.background = "#6abf6a"; label.textContent = "Synced"; }
-      if (state === "loading") { badge.style.background = "#1a1a1a"; badge.style.color = "#888"; dot.style.background = "#888"; label.innerHTML = '<span class="spinner"></span> Syncing...'; }
-      if (state === "err") { badge.style.background = "#2a1010"; badge.style.color = "#ff6b6b"; dot.style.background = "#ff6b6b"; label.textContent = "Sync error"; }
+      try {
+        const badge = document.getElementById("sync-badge");
+        if (!badge) return;
+        const dot = badge.querySelector(".sync-dot");
+        const label = document.getElementById("sync-status");
+        if (state === "ok") { 
+          badge.style.background = "#0f2a0f"; 
+          badge.style.color = "#6abf6a"; 
+          if (dot) dot.style.background = "#6abf6a"; 
+          if (label) label.textContent = "Synced"; 
+        }
+        if (state === "loading") { 
+          badge.style.background = "#1a1a1a"; 
+          badge.style.color = "#888"; 
+          if (dot) dot.style.background = "#888"; 
+          if (label) label.innerHTML = '<span class="spinner"></span> Syncing...'; 
+        }
+        if (state === "err") { 
+          badge.style.background = "#2a1010"; 
+          badge.style.color = "#ff6b6b"; 
+          if (dot) dot.style.background = "#ff6b6b"; 
+          if (label) label.textContent = "Sync error"; 
+        }
+      } catch (e) {
+        console.error("Error updating sync status:", e);
+      }
     }
 
     function render() {
-      const total = orders.reduce((s, o) => s + o.qty, 0);
-      const paidOrders = orders.filter(o => o.paidAmount > 0);
-      const unpaidOrders = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
+      try {
+        // Validate orders array
+        if (!Array.isArray(orders)) {
+          console.error("Orders is not an array:", orders);
+          orders = [];
+        }
 
-      document.getElementById("grand-total").textContent = total;
-      document.getElementById("order-count").textContent = orders.length;
-      
+        const total = orders.reduce((s, o) => {
+          const qty = parseInt(o.qty) || 0;
+          return s + qty;
+        }, 0);
+        
+        const paidOrders = orders.filter(o => (parseFloat(o.paidAmount) || 0) > 0);
+        const unpaidOrders = orders.filter(o => (parseFloat(o.paidAmount) || 0) <= 0);
+
+        const totalEl = document.getElementById("grand-total");
+        if (totalEl) totalEl.textContent = total;
+        
+        const countEl = document.getElementById("order-count");
+        if (countEl) countEl.textContent = orders.length;
+        
+        
       // Update Guest Metrics
       const statDelivered = document.getElementById("stat-delivered");
       const statProcessing = document.getElementById("stat-processing");
@@ -657,23 +791,28 @@
 
       renderOrders();
       if (activeTab === "summary") renderSummary();
+      } catch (e) {
+        console.error("Render error:", e);
+      }
     }
 
     function renderOrders() {
-      const list = document.getElementById("order-list");
-      const empty = document.getElementById("empty-state");
-      
-      let filtered = orders;
-      if (document.body.classList.contains('is-admin')) {
-        if (orderFilter === 'paid') filtered = orders.filter(o => o.paidAmount > 0);
-        if (orderFilter === 'unpaid') filtered = orders.filter(o => !o.paidAmount || o.paidAmount <= 0);
-      }
+      try {
+        const list = document.getElementById("order-list");
+        const empty = document.getElementById("empty-state");
+        if (!list || !empty) return;
+        
+        let filtered = orders;
+        if (document.body.classList.contains('is-admin')) {
+          if (orderFilter === 'paid') filtered = orders.filter(o => (parseFloat(o.paidAmount) || 0) > 0);
+          if (orderFilter === 'unpaid') filtered = orders.filter(o => (parseFloat(o.paidAmount) || 0) <= 0);
+        }
 
-      if (!filtered.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
-      empty.style.display = "none";
-      list.innerHTML = filtered.map((o, i) => {
-        const cm = COLOR_META[o.color];
-        return `<div class="order-card">
+        if (!filtered.length) { list.innerHTML = ""; empty.style.display = "block"; return; }
+        empty.style.display = "none";
+        list.innerHTML = filtered.map((o, i) => {
+          const cm = COLOR_META[o.color] || { bg: "#333", dot: "#999", text: "#fff" };
+          return `<div class="order-card">
       <div class="order-idx">${i + 1}</div>
       <div class="color-dot" style="background:${cm.bg};border:2px solid ${cm.dot}"></div>
       <div class="order-info">
@@ -691,13 +830,21 @@
       </div>
     </div>`;
       }).join("");
+      } catch (e) {
+        console.error("renderOrders error:", e);
+        const list = document.getElementById("order-list");
+        if (list) list.innerHTML = "<div style='padding:20px;color:var(--danger)'>Error loading orders</div>";
+      }
     }
 
     function renderSummary() {
+      try {
       const calculateSummary = (data) => {
         const g = {};
         COLORS.forEach(c => { g[c] = {}; SIZES.forEach(s => g[c][s] = 0); });
-        data.forEach(({ color, size, qty }) => { if (g[color]) g[color][size] += qty; });
+        data.forEach(({ color, size, qty }) => { 
+          if (g[color]) g[color][size] += (parseInt(qty) || 0); 
+        });
         return g;
       };
 
@@ -730,65 +877,109 @@
       const tbl = document.getElementById("all-orders-table");
       if (!orders.length) { tbl.style.display = "none"; return; }
       tbl.style.display = "block";
-      document.getElementById("all-orders-rows").innerHTML = orders.map((o, i) => {
-        const cm = COLOR_META[o.color];
+      const rowsEl = document.getElementById("all-orders-rows");
+      if (!rowsEl) return;
+      rowsEl.innerHTML = orders.map((o, i) => {
+        const cm = COLOR_META[o.color] || { bg: "#333", dot: "#999", text: "#fff" };
         return `<div class="all-orders-row">
       <div style="font-size:11px;color:var(--text-muted);min-width:18px">${i + 1}</div>
       <div style="width:8px;height:8px;border-radius:50%;background:${cm.bg};border:1px solid ${cm.dot};flex-shrink:0"></div>
       <div class="all-name">${esc(o.name)}</div>
-      <div class="all-meta">${o.color} · ${o.size} ${document.body.classList.contains('is-admin') && o.paidAmount > 0 ? `<br><span style="color:var(--success); font-size:9px">PAID ${o.paidAmount}</span>` : ''}</div>
+      <div class="all-meta">${o.color} · ${o.size} ${document.body.classList.contains('is-admin') && (parseFloat(o.paidAmount) || 0) > 0 ? `<br><span style="color:var(--success); font-size:9px">PAID ${o.paidAmount}</span>` : ''}</div>
       <div class="all-qty">×${o.qty}</div></div>`;
       }).join("");
+      } catch (e) {
+        console.error("renderSummary error:", e);
+      }
     }
 
     function setOrderFilter(f) {
-      orderFilter = f;
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('filter-' + f).classList.add('active');
-      renderOrders();
+      try {
+        orderFilter = f;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        const filterEl = document.getElementById('filter-' + f);
+        if (filterEl) filterEl.classList.add('active');
+        renderOrders();
+      } catch (e) {
+        console.error("setOrderFilter error:", e);
+      }
     }
 
     function toggleGuestForm() {
-      const container = document.getElementById("guest-form-container");
-      const btn = document.getElementById("guest-cta");
-      const isHidden = container.style.display === "none";
-      
-      if (isHidden) {
-        container.style.display = "block";
-        btn.textContent = "✕ CANCEL";
-        btn.style.background = "var(--danger)";
-        btn.style.color = "white";
-        // smooth scroll
-        setTimeout(() => container.scrollIntoView({ behavior: 'smooth' }), 100);
-      } else {
-        container.style.display = "none";
-        btn.textContent = "PLACE NEW ORDER";
-        btn.style.background = "var(--text)";
-        btn.style.color = "var(--bg)";
+      try {
+        const container = document.getElementById("guest-form-container");
+        const btn = document.getElementById("guest-cta");
+        if (!container || !btn) return;
+        
+        const isHidden = container.style.display === "none";
+        
+        if (isHidden) {
+          container.style.display = "block";
+          btn.textContent = "✕ CANCEL";
+          btn.style.background = "var(--danger)";
+          btn.style.color = "white";
+          // smooth scroll
+          setTimeout(() => container.scrollIntoView({ behavior: 'smooth' }), 100);
+        } else {
+          container.style.display = "none";
+          btn.textContent = "PLACE NEW ORDER";
+          btn.style.background = "var(--text)";
+          btn.style.color = "var(--bg)";
+        }
+      } catch (e) {
+        console.error("toggleGuestForm error:", e);
       }
     }
 
     function switchTab(t) {
-      activeTab = t;
-      document.getElementById("view-orders").style.display = t === "orders" ? "block" : "none";
-      document.getElementById("view-summary").style.display = t === "summary" ? "block" : "none";
-      document.getElementById("tab-orders").className = "tab " + (t === "orders" ? "active" : "inactive");
-      document.getElementById("tab-summary").className = "tab " + (t === "summary" ? "active" : "inactive");
-      if (t === "summary") renderSummary();
+      try {
+        activeTab = t;
+        const viewOrders = document.getElementById("view-orders");
+        const viewSummary = document.getElementById("view-summary");
+        const tabOrders = document.getElementById("tab-orders");
+        const tabSummary = document.getElementById("tab-summary");
+        
+        if (viewOrders) viewOrders.style.display = t === "orders" ? "block" : "none";
+        if (viewSummary) viewSummary.style.display = t === "summary" ? "block" : "none";
+        if (tabOrders) tabOrders.className = "tab " + (t === "orders" ? "active" : "inactive");
+        if (tabSummary) tabSummary.className = "tab " + (t === "summary" ? "active" : "inactive");
+        if (t === "summary") renderSummary();
+      } catch (e) {
+        console.error("switchTab error:", e);
+      }
     }
 
     function openAdd() {
-      editId = null; formColor = "Black"; formSize = "M"; formQty = 1;
-      document.getElementById("f-name").value = "";
-      document.getElementById("f-paid").value = "";
-      document.getElementById("form-title").textContent = "NEW ORDER";
-      document.getElementById("submit-btn").textContent = "PLACE ORDER";
-      document.getElementById("qty-display").textContent = 1;
-      buildColorRow(); buildSizeRow();
-      
-      if (document.body.classList.contains('is-admin')) {
-        document.getElementById("form-overlay").style.display = "flex";
-        setTimeout(() => document.getElementById("f-name").focus(), 100);
+      try {
+        editId = null; 
+        formColor = "Black"; 
+        formSize = "M"; 
+        formQty = 1;
+        const fName = document.getElementById("f-name");
+        const fPaid = document.getElementById("f-paid");
+        if (fName) fName.value = "";
+        if (fPaid) fPaid.value = "";
+        const formTitle = document.getElementById("form-title");
+        if (formTitle) formTitle.textContent = "NEW ORDER";
+        const submitBtn = document.getElementById("submit-btn");
+        if (submitBtn) submitBtn.textContent = "PLACE ORDER";
+        const qtyDisplay = document.getElementById("qty-display");
+        if (qtyDisplay) qtyDisplay.textContent = 1;
+        buildColorRow(); 
+        buildSizeRow();
+        
+        if (document.body.classList.contains('is-admin')) {
+          const formOverlay = document.getElementById("form-overlay");
+          if (formOverlay) {
+            formOverlay.style.display = "flex";
+            setTimeout(() => {
+              const fNameEl = document.getElementById("f-name");
+              if (fNameEl) fNameEl.focus();
+            }, 100);
+          }
+        }
+      } catch (e) {
+        console.error("openAdd error:", e);
       }
     }
 
@@ -855,73 +1046,172 @@
       const paidStr = document.getElementById("f-paid").value || "0";
       const paidAmount = parseFloat(paidStr) || 0;
 
+      // Validation
       if (!name) { showToast("Enter a name", "err"); return; }
-      if (saving) return;
+      if (saving) { showToast("Already saving...", "err"); return; }
+      
       saving = true;
       const btn = document.getElementById("submit-btn");
-      btn.textContent = "SAVING..."; btn.style.opacity = "0.7";
+      const originalText = btn.textContent;
+      btn.textContent = "SAVING..."; 
+      btn.style.opacity = "0.7";
+      btn.disabled = true;
       setSyncStatus("loading");
-      if (editId) {
-        orders = orders.map(o => o.id === editId ? { ...o, name, color: formColor, size: formSize, qty: formQty, paidAmount } : o);
-      } else {
-        orders.push({ id: uid(), name, color: formColor, size: formSize, qty: formQty, paidAmount });
-      }
+
       try {
+        // Create the updated order
+        if (editId) {
+          orders = orders.map(o => o.id === editId ? { 
+            ...o, 
+            name, 
+            color: formColor, 
+            size: formSize, 
+            qty: parseInt(formQty) || 1,
+            paidAmount: parseFloat(paidAmount) || 0
+          } : o);
+          console.log("📝 Updating order:", editId);
+        } else {
+          const newOrder = { 
+            id: uid(), 
+            name, 
+            color: formColor, 
+            size: formSize, 
+            qty: parseInt(formQty) || 1,
+            paidAmount: parseFloat(paidAmount) || 0
+          };
+          orders.push(newOrder);
+          console.log("📝 Adding new order:", newOrder.id);
+        }
+
+        // Write to Firebase
         await fbWrite(orders);
+        
+        // Re-read from server to confirm
+        console.log("🔄 Re-reading from server to confirm...");
+        const confirmedOrders = await fbRead();
+        orders = confirmedOrders;
+        
         setSyncStatus("ok");
         closeForm();
         render();
-        showToast(editId ? "Updated!" : "Order added!");
+        showToast(editId ? "✅ Updated!" : "✅ Order added!");
+        editId = null;
       } catch (e) {
+        console.error("Submit error:", e);
         setSyncStatus("err");
         showToast("Save failed: " + e.message, "err");
+        // Reload orders from server on error
+        try {
+          orders = await fbRead();
+          render();
+        } catch (reloadErr) {
+          console.error("Could not reload after error:", reloadErr);
+        }
+      } finally {
+        saving = false;
+        btn.textContent = originalText;
+        btn.style.opacity = "1";
+        btn.disabled = false;
       }
-      saving = false; btn.style.opacity = "1";
     }
 
     function askDelete(id) { deleteId = id; document.getElementById("confirm-overlay").style.display = "flex"; }
     function cancelDelete() { deleteId = null; document.getElementById("confirm-overlay").style.display = "none"; }
+    
     async function confirmDelete() {
-      orders = orders.filter(o => o.id !== deleteId);
-      try { await fbWrite(orders); setSyncStatus("ok"); } catch { setSyncStatus("err"); }
-      render(); cancelDelete(); showToast("Deleted");
+      if (saving) return;
+      saving = true;
+      setSyncStatus("loading");
+      
+      try {
+        const deletedId = deleteId;
+        orders = orders.filter(o => o.id !== deletedId);
+        
+        console.log("🗑️ Deleting order:", deletedId);
+        await fbWrite(orders);
+        
+        // Verify deletion
+        const confirmedOrders = await fbRead();
+        orders = confirmedOrders;
+        
+        setSyncStatus("ok");
+        render();
+        showToast("✅ Deleted");
+      } catch (e) {
+        console.error("Delete error:", e);
+        setSyncStatus("err");
+        showToast("Delete failed: " + e.message, "err");
+      } finally {
+        saving = false;
+        cancelDelete();
+      }
     }
 
     function showToast(msg, type = "ok") {
-      const el = document.getElementById("toast");
-      el.textContent = msg;
-      el.style.background = type === "err" ? "var(--danger)" : "var(--text)";
-      el.style.color = type === "err" ? "#fff" : "var(--bg)";
-      el.style.display = "block"; el.style.opacity = 1;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.style.display = "none", 300); }, 2500);
+      try {
+        const el = document.getElementById("toast");
+        if (!el) return;
+        el.textContent = msg;
+        el.style.background = type === "err" ? "var(--danger)" : "var(--text)";
+        el.style.color = type === "err" ? "#fff" : "var(--bg)";
+        el.style.display = "block"; 
+        el.style.opacity = 1;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { 
+          el.style.opacity = 0; 
+          setTimeout(() => el.style.display = "none", 300); 
+        }, 2500);
+      } catch (e) {
+        console.error("showToast error:", e);
+      }
     }
 
-    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-    function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    function uid() { 
+      try {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); 
+      } catch (e) {
+        console.error("uid error:", e);
+        return "order_" + Date.now();
+      }
+    }
+    
+    function esc(s) { 
+      try {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      } catch (e) {
+        console.error("esc error:", e);
+        return String(s);
+      }
+    }
 
     async function exportSummaryToPdf() {
-      const element = document.getElementById('pdf-content');
-      const opt = {
-        margin: [10, 10],
-        filename: `OUTOFMYMISERY_Orders_Summary_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, backgroundColor: '#000000', useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      
-      showToast("Generating PDF...");
       try {
+        const element = document.getElementById('pdf-content');
+        if (!element) {
+          showToast("PDF content not found", "err");
+          return;
+        }
+        const opt = {
+          margin: [10, 10],
+          filename: `OUTOFMYMISERY_Orders_Summary_${new Date().toISOString().slice(0,10)}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, backgroundColor: '#000000', useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        showToast("Generating PDF...");
         await html2pdf().set(opt).from(element).save();
-        showToast("PDF Downloaded!");
+        showToast("✅ PDF Downloaded!");
       } catch (e) {
-        showToast("PDF Export failed", "err");
-        console.error(e);
+        showToast("PDF Export failed: " + e.message, "err");
+        console.error("PDF export error:", e);
       }
     }
 
     startApp();
   </script>
 </body>
+
+</html>
 
 </html>
